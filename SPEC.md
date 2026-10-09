@@ -51,8 +51,8 @@ _Last updated: 2026-10-09_
 | Source | Gives us | How | Status |
 |---|---|---|---|
 | **Goodreads CSV export** | Past books: title, author, rating, pages, date read, shelf, review (→ quotes) | One-time import | Done (`data/`) |
-| **Goodreads shelf RSS** (`/review/list_rss/<user-id>?shelf=…`) | Finished books + date read, rating, review, **cover image** | Poll ~hourly | Verify with my user ID |
-| **Goodreads updates RSS** (`/user/updates_rss/<user-id>`) | "Started reading X" events + timestamps → **start dates** | Poll ~hourly | ⏳ Verify that "started reading" events appear |
+| **Goodreads shelf RSS** (`/review/list_rss/<user-id>?shelf=…&page=n`) | currently-reading `user_date_added` → **start date**; read `user_read_at` → **finish date**; did-not-finish → DNF; **cover image** | On launch + hourly | ✅ Built. Feed ratings are rounded to whole stars, so they never overwrite a precise one |
+| ~~Goodreads updates RSS~~ | Not needed: the currently-reading shelf feed already gives start dates | — | ❌ Dropped |
 | **Manual entry (app)** | Quotes, DNF, corrections to any date | Upload screen / buttons | To build |
 | **Mac Kindle app (local DB)** | Progress position, "read" state, highlights | Read-only access to its SQLite files | Optional, only for feature 2 |
 
@@ -107,7 +107,8 @@ Data lives in `~/Library/Containers/com.amazon.Lassen/Data/Library/`. **Read-onl
 ---
 
 ## Covers & spines
-- **Front covers**, by priority: Open Library Covers API by ISBN13 (71 of 82 books have one) → Goodreads RSS cover URL → Kindle app cover cache (`Library/Caches/covers`, `HighResCovers`; ~40 books, 953×1440) → manual override in the app.
+- **Front covers**, by priority: **Goodreads RSS cover** (the edition I shelved; size suffix like `._SY475_` removed for the original) → Open Library (ISBN, then title/author search; can return translated editions) → manual override in the app (never replaced).
+- Kindle app cover cache isn't usable (only ~38 files, names can't be matched to books).
 - Covers are **downloaded once and stored locally** in the shared container. Widgets can't fetch images while rendering.
 - **Spines** (for the future digital bookshelf): no API provides spine images, so they're **generated**. Colour = the cover's dominant colours, width ∝ page count, vertical title/author text. Optional manual spine photo per book.
 
@@ -129,9 +130,7 @@ Data lives in `~/Library/Containers/com.amazon.Lassen/Data/Library/`. **Read-onl
 ---
 
 ## Open items
-- [ ] Send Goodreads profile link → verify both RSS feeds (fields, cover sizes, "started reading" events, review text).
-- [ ] Confirm the Goodreads profile/shelves are public.
-- [ ] If the updates feed lacks start events: fall back to a "Start reading" button, or to the date a book appears on `currently-reading` in the shelf feed.
+- [x] Goodreads feeds verified and synced (shelves are public).
 - [ ] (Later, feature 2) Re-run the Kindle sync test.
 - [ ] Decide widget sizes and the calendar look, e.g. how two covers share one day.
 
