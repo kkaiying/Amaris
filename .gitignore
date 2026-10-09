@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Xcode per-user settings & build output
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Personal reading data (Goodreads export incl. review text) — kept local only
+data/
+
+# Claude Code local settings
+.claude/settings.local.json
