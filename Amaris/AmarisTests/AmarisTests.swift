@@ -321,3 +321,55 @@ struct CoverStoreTests {
         #expect(!FeedApplier.wantsGoodreadsCover(book))   // no re-download
     }
 }
+
+struct BookTitleTests {
+    @Test func splitsTitleAndSeries() {
+        #expect(BookTitle.base("Crooked Kingdom (Six of Crows, #2)") == "Crooked Kingdom")
+        #expect(BookTitle.series("Crooked Kingdom (Six of Crows, #2)") == "Six of Crows #2")
+        #expect(BookTitle.series("The Assassin's Blade (Throne of Glass, #0.1-0.5)") == "Throne of Glass #0.1-0.5")
+        #expect(BookTitle.base("Alchemised") == "Alchemised")
+        #expect(BookTitle.series("Alchemised") == nil)
+    }
+}
+
+@MainActor
+struct ShelfChangeTests {
+    func item(_ id: String, readAt: String? = nil, added: Date? = nil) -> FeedItem {
+        FeedItem(bookID: id, title: "Book \(id)", author: "Author", imageURL: nil,
+                 readAt: readAt.map(day), dateAdded: added, rating: nil, pageCount: nil)
+    }
+
+    func sync(_ items: [FeedItem], _ shelf: Shelf, _ context: ModelContext) throws {
+        var summary = SyncSummary()
+        _ = try FeedApplier.apply(items, shelf: shelf, to: context, summary: &summary)
+    }
+
+    @Test func dnfMarkedInAppSurvivesSyncWhileShelfUnchanged() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        try sync([item("1", added: day("2026/10/01"))], .currentlyReading, context)
+        let book = try #require(try context.fetch(FetchDescriptor<Book>()).first)
+
+        // Marked DNF in the app; Goodreads still says currently-reading.
+        let reading = try #require(book.openReading)
+        reading.finishedAt = day("2026/10/05")
+        reading.outcome = .dnf
+        reading.datesEditedManually = true
+        book.status = .dnf
+
+        try sync([item("1", added: day("2026/10/01"))], .currentlyReading, context)
+        #expect(book.status == .dnf)
+        #expect(book.readings?.count == 1)          // no new reading started
+        #expect(reading.finishedAt == day("2026/10/05"))
+    }
+
+    @Test func movingShelfOnGoodreadsStillApplies() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        try sync([item("1", added: day("2026/10/01"))], .currentlyReading, context)
+        let book = try #require(try context.fetch(FetchDescriptor<Book>()).first)
+        book.status = .dnf                           // app edit…
+
+        try sync([item("1", readAt: "2026/10/08")], .read, context)
+        #expect(book.status == .read)                // …but finishing on Goodreads wins
+        #expect(book.latestReading?.finishedAt == day("2026/10/08"))
+    }
+}

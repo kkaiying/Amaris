@@ -97,6 +97,6 @@ final class CoverFetcher {
 
     /// "Crooked Kingdom (Six of Crows, #2)" → "Crooked Kingdom", for better search hits.
     nonisolated static func baseTitle(_ title: String) -> String {
-        title.replacing(/\s*\([^()]*#[^()]*\)\s*$/, with: "")
+        BookTitle.base(title)
     }
 }

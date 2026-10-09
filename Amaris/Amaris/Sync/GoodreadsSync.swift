@@ -57,24 +57,29 @@ enum FeedApplier {
             // The feed rounds ratings to whole stars; only fill in a missing one.
             if book.rating == nil, let rating = item.rating { book.rating = Double(rating) }
 
+            // Only a move to a different shelf changes status or starts/ends a
+            // reading, so edits made in the app (e.g. marking DNF) aren't undone.
+            let movedShelf = book.goodreadsShelf != shelf.rawValue
+            book.goodreadsShelf = shelf.rawValue
+
             switch shelf {
             case .currentlyReading:
-                book.status = .reading
                 let start = item.dateAdded.map(calendar.startOfDay) ?? calendar.startOfDay(for: today)
-                if let open = openReading(of: book) {
+                if let open = book.openReading {
                     if open.startIsEstimated, !open.datesEditedManually {
                         open.startedAt = start
                         open.startIsEstimated = false
                     }
-                } else {
+                } else if movedShelf {
                     context.insert(Reading(book: book, startedAt: start, source: .goodreadsRSS))
                     summary.started += 1
                 }
+                if movedShelf { book.status = .reading }
 
             case .read:
-                book.status = .read
                 guard let finish = item.readAt else { break }
-                if let latest = latestReading(of: book) {
+                if let latest = book.latestReading {
+                    // Also picks up a "date read" corrected on Goodreads.
                     if !latest.datesEditedManually, latest.finishedAt != finish {
                         if latest.finishedAt == nil { summary.finished += 1 }
                         latest.finishedAt = finish
@@ -88,13 +93,16 @@ enum FeedApplier {
                     context.insert(reading)
                     summary.finished += 1
                 }
+                if movedShelf { book.status = .read }
 
             case .didNotFinish:
-                book.status = .dnf
-                if let open = openReading(of: book), !open.datesEditedManually {
-                    open.finishedAt = item.dateAdded.map(calendar.startOfDay) ?? calendar.startOfDay(for: today)
-                    open.outcome = .dnf
-                    summary.dnf += 1
+                if movedShelf {
+                    if let open = book.openReading, !open.datesEditedManually {
+                        open.finishedAt = item.dateAdded.map(calendar.startOfDay) ?? calendar.startOfDay(for: today)
+                        open.outcome = .dnf
+                        summary.dnf += 1
+                    }
+                    book.status = .dnf
                 }
             }
 
@@ -112,14 +120,6 @@ enum FeedApplier {
         case .goodreads: !CoverStore.hasCover(for: book)
         case .openLibrary, nil: true
         }
-    }
-
-    private static func openReading(of book: Book) -> Reading? {
-        (book.readings ?? []).first { $0.finishedAt == nil }
-    }
-
-    private static func latestReading(of book: Book) -> Reading? {
-        (book.readings ?? []).max { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }
     }
 
     /// Same rule as the CSV backfill: the previous finish, at most 30 days back.

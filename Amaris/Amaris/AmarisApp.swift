@@ -10,10 +10,23 @@ import SwiftData
 
 @main
 struct AmarisApp: App {
+    @State private var model = AppModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(model)
         }
         .modelContainer(AmarisStore.shared)
+        .commands {
+            CommandGroup(after: .importExport) {
+                Button("Import Goodreads CSV…") { model.isImportingCSV = true }
+            }
+        }
+
+        Settings {
+            SettingsView()
+                .environment(model)
+        }
     }
 }

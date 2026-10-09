@@ -15,9 +15,10 @@ enum CoverStore {
     static let maxPixelSize = 900
 
     /// Saves a cover for a book, replacing any previous file.
-    /// The source is part of the file name so views reload when a cover changes.
+    /// Each save gets a new file name so views reload when a cover changes.
     static func save(_ data: Data, for book: Book, source: CoverSource) throws {
-        let fileName = "\(book.goodreadsID ?? UUID().uuidString)-\(source.rawValue).jpg"
+        let unique = UUID().uuidString.prefix(8)
+        let fileName = "\(book.goodreadsID ?? UUID().uuidString)-\(source.rawValue)-\(unique).jpg"
         let url = AmarisStore.coversDirectory.appending(path: fileName)
         try (normalizedJPEG(data) ?? data).write(to: url, options: .atomic)
 

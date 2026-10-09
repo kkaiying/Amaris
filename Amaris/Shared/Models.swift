@@ -52,6 +52,10 @@ final class Book {
     // Stored as a raw string so SwiftData can persist and query it.
     var statusRaw: String = BookStatus.reading.rawValue
 
+    /// The Goodreads shelf this book was on at the last sync. Sync only changes
+    /// status and dates when the shelf changes, so edits made in the app stick.
+    var goodreadsShelf: String?
+
     @Relationship(deleteRule: .cascade, inverse: \Reading.book)
     var readings: [Reading]? = []
 
