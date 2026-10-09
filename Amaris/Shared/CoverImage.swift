@@ -6,11 +6,44 @@
 //  Shared with the widgets, which can only use locally cached images.
 //
 
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum CoverStore {
-    static func fileName(for book: Book) -> String {
-        "\(book.goodreadsID ?? UUID().uuidString).jpg"
+    /// Covers are scaled down to this height: sharp in the app, light for widgets.
+    static let maxPixelSize = 900
+
+    /// Saves a cover for a book, replacing any previous file.
+    /// The source is part of the file name so views reload when a cover changes.
+    static func save(_ data: Data, for book: Book, source: CoverSource) throws {
+        let fileName = "\(book.goodreadsID ?? UUID().uuidString)-\(source.rawValue).jpg"
+        let url = AmarisStore.coversDirectory.appending(path: fileName)
+        try (normalizedJPEG(data) ?? data).write(to: url, options: .atomic)
+
+        if let old = book.coverFileName, old != fileName {
+            try? FileManager.default.removeItem(at: AmarisStore.coversDirectory.appending(path: old))
+        }
+        book.coverFileName = fileName
+        book.coverSource = source
+    }
+
+    /// Downscales an image to `maxPixelSize` and re-encodes it as JPEG.
+    /// Returns nil if the data isn't a readable image.
+    nonisolated static func normalizedJPEG(_ data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
+        else { return nil }
+        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? output as Data : nil
     }
 
     static func url(for book: Book) -> URL? {
@@ -19,7 +52,7 @@ enum CoverStore {
 
     static func hasCover(for book: Book) -> Bool {
         guard let url = url(for: book) else { return false }
-        return FileManager.default.fileExists(atPath: url.path())
+        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
     }
 }
 
@@ -56,7 +89,7 @@ struct CoverImage: View {
         #if canImport(AppKit)
         return NSImage(contentsOf: url).map(Image.init(nsImage:))
         #else
-        return UIImage(contentsOfFile: url.path()).map(Image.init(uiImage:))
+        return UIImage(contentsOfFile: url.path(percentEncoded: false)).map(Image.init(uiImage:))
         #endif
     }
 }

@@ -9,15 +9,17 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// Temporary screen to check the import works. Replaced by the real
+/// Temporary screen to check import and sync work. Replaced by the real
 /// library / quotes / calendar views later.
 struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Query private var books: [Book]
     @Query private var quotes: [Quote]
 
+    @State private var goodreads = GoodreadsSync()
     @State private var coverFetcher = CoverFetcher()
     @State private var isPickingFile = false
+    @State private var profileText = ""
     @State private var message: String?
 
     private var booksNewestFirst: [Book] {
@@ -38,10 +40,17 @@ struct ContentView: View {
             }
         }
         .padding(.vertical)
-        .frame(minWidth: 520, minHeight: 480)
+        .frame(minWidth: 560, minHeight: 520)
         .fileImporter(isPresented: $isPickingFile,
                       allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
             handlePickedFile(result)
+        }
+        // Sync on launch and hourly while the window is open.
+        .task(id: goodreads.userID) {
+            while !Task.isCancelled {
+                await syncNow()
+                try? await Task.sleep(for: GoodreadsSync.syncInterval)
+            }
         }
     }
 
@@ -53,18 +62,44 @@ struct ContentView: View {
 
             HStack {
                 Button("Import Goodreads CSV…") { isPickingFile = true }
-                Button("Fetch Missing Covers") { fetchCovers() }
-                    .disabled(coverFetcher.isRunning || books.isEmpty)
+                Button("Sync Goodreads") { Task { await syncNow() } }
+                    .disabled(goodreads.userID == nil || goodreads.isSyncing)
             }
 
-            if coverFetcher.isRunning {
-                ProgressView(value: Double(coverFetcher.completed), total: Double(max(coverFetcher.total, 1))) {
-                    Text("Fetching covers… \(coverFetcher.completed)/\(coverFetcher.total)")
+            if goodreads.userID == nil {
+                HStack {
+                    TextField("Goodreads profile link", text: $profileText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 320)
+                    Button("Connect") {
+                        goodreads.userID = GoodreadsFeed.userID(from: profileText)
+                        if goodreads.userID == nil { message = "That doesn't look like a Goodreads profile link." }
+                    }
                 }
-                .frame(width: 300)
-            } else if let message {
-                Text(message).font(.callout).foregroundStyle(.secondary)
             }
+
+            status
+        }
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        if goodreads.isSyncing {
+            ProgressView("Syncing with Goodreads…").controlSize(.small)
+        } else if coverFetcher.isRunning {
+            ProgressView(value: Double(coverFetcher.completed), total: Double(max(coverFetcher.total, 1))) {
+                Text("Fetching covers… \(coverFetcher.completed)/\(coverFetcher.total)")
+            }
+            .frame(width: 300)
+        } else if let error = goodreads.lastError {
+            Text(error).font(.callout).foregroundStyle(.red)
+        } else if let message {
+            Text(message).font(.callout).foregroundStyle(.secondary)
+        } else if let summary = goodreads.lastSummary, let date = goodreads.lastSyncedAt {
+            Text("Synced \(date.formatted(date: .omitted, time: .shortened)): "
+                 + "\(summary.started) started, \(summary.finished) finished, "
+                 + "\(summary.coversUpdated) covers updated")
+                .font(.callout).foregroundStyle(.secondary)
         }
     }
 
@@ -80,20 +115,24 @@ struct ContentView: View {
             let summary = try GoodreadsImporter.importCSV(text, into: context)
             message = "Imported: \(summary.booksAdded) new books, \(summary.booksUpdated) updated, "
                 + "\(summary.readingsAdded) reading spans, \(summary.quotesAdded) quotes."
-            fetchCovers()
+            Task { await syncNow() }
         } catch {
             message = "Import failed: \(error.localizedDescription)"
         }
     }
 
-    private func fetchCovers() {
-        Task {
-            await coverFetcher.fetchMissingCovers(in: context)
-            let stillMissing = coverFetcher.total - coverFetcher.found
-            message = coverFetcher.total == 0
-                ? "All books already have covers."
-                : "Found \(coverFetcher.found) of \(coverFetcher.total) covers"
-                    + (stillMissing > 0 ? " · \(stillMissing) still missing." : ".")
+    /// Goodreads first (covers match my editions), then Open Library for any gaps.
+    private func syncNow() async {
+        message = nil
+        await goodreads.sync(in: context)
+        await fillMissingCovers()
+    }
+
+    private func fillMissingCovers() async {
+        await coverFetcher.fetchMissingCovers(in: context)
+        let stillMissing = coverFetcher.total - coverFetcher.found
+        if stillMissing > 0 {
+            message = "\(stillMissing) books still have no cover."
         }
     }
 

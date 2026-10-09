@@ -178,3 +178,146 @@ struct CoverFetcherTests {
         #expect(CoverFetcher.baseTitle("Alchemised") == "Alchemised")
     }
 }
+
+struct GoodreadsFeedTests {
+    let xml = """
+    <?xml version="1.0"?>
+    <rss><channel><title>Shelf</title>
+    <item>
+      <title><![CDATA[Some Book (Series, #1)]]></title>
+      <book_id>123</book_id>
+      <book_large_image_url><![CDATA[https://i.gr-assets.com/books/1639888350l/123._SY475_.jpg]]></book_large_image_url>
+      <author_name>Some  Author</author_name>
+      <user_rating>3</user_rating>
+      <user_read_at><![CDATA[Sat, 3 Oct 2026 00:00:00 +0000]]></user_read_at>
+      <user_date_added><![CDATA[Mon, 05 Oct 2026 13:01:53 -0700]]></user_date_added>
+      <book id="123"><num_pages>449</num_pages></book>
+    </item>
+    <item>
+      <title>No Photo</title><book_id>456</book_id>
+      <book_large_image_url>https://s.gr-assets.com/assets/nophoto/book/111x148.png</book_large_image_url>
+      <user_rating>0</user_rating><user_read_at></user_read_at>
+    </item>
+    </channel></rss>
+    """
+
+    @Test func parsesItems() throws {
+        let items = GoodreadsFeed.parse(Data(xml.utf8))
+        #expect(items.count == 2)
+        let first = try #require(items.first)
+        #expect(first.bookID == "123")
+        #expect(first.title == "Some Book (Series, #1)")
+        #expect(first.author == "Some Author")
+        #expect(first.imageURL?.absoluteString == "https://i.gr-assets.com/books/1639888350l/123.jpg")
+        #expect(first.readAt == day("2026/10/03"))
+        #expect(first.rating == 3)
+        #expect(first.pageCount == 449)
+
+        #expect(items[1].imageURL == nil)   // "nophoto" placeholder
+        #expect(items[1].rating == nil)
+        #expect(items[1].readAt == nil)
+    }
+
+    @Test func readsUserIDFromProfileLink() {
+        #expect(GoodreadsFeed.userID(from: "https://www.goodreads.com/user/show/156605841-lin") == "156605841")
+        #expect(GoodreadsFeed.userID(from: " 156605841 ") == "156605841")
+        #expect(GoodreadsFeed.userID(from: "not a link") == nil)
+    }
+}
+
+@MainActor
+struct FeedApplierTests {
+    func item(_ id: String, readAt: String? = nil, added: Date? = nil, rating: Int? = nil) -> FeedItem {
+        FeedItem(bookID: id, title: "Book \(id)", author: "Author", imageURL: URL(string: "https://example.com/\(id).jpg"),
+                 readAt: readAt.map(day), dateAdded: added, rating: rating, pageCount: nil)
+    }
+
+    func apply(_ items: [FeedItem], _ shelf: Shelf, _ context: ModelContext) throws -> SyncSummary {
+        var summary = SyncSummary()
+        _ = try FeedApplier.apply(items, shelf: shelf, to: context, summary: &summary)
+        try context.save()
+        return summary
+    }
+
+    func book(_ id: String, _ context: ModelContext) throws -> Book {
+        try #require(try context.fetch(FetchDescriptor<Book>()).first { $0.goodreadsID == id })
+    }
+
+    @Test func startingThenFinishingABook() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let started = try apply([item("1", added: day("2026/10/10").addingTimeInterval(3600 * 13))], .currentlyReading, context)
+        #expect(started.started == 1)
+        let reading = try #require(try book("1", context).readings?.first)
+        #expect(reading.startedAt == day("2026/10/10"))
+        #expect(reading.finishedAt == nil)
+
+        let finished = try apply([item("1", readAt: "2026/10/14")], .read, context)
+        #expect(finished.finished == 1)
+        #expect(reading.finishedAt == day("2026/10/14"))
+        #expect(try book("1", context).status == .read)
+        #expect(try book("1", context).readings?.count == 1)
+    }
+
+    @Test func dnfClosesOpenReading() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        _ = try apply([item("1", added: day("2026/10/01"))], .currentlyReading, context)
+        let summary = try apply([item("1", added: day("2026/10/04"))], .didNotFinish, context)
+        #expect(summary.dnf == 1)
+        let reading = try #require(try book("1", context).readings?.first)
+        #expect(reading.finishedAt == day("2026/10/04"))
+        #expect(reading.outcome == .dnf)
+    }
+
+    @Test func roundedFeedRatingNeverReplacesPreciseRating() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        _ = try apply([item("1", readAt: "2026/10/03", rating: 4)], .read, context)
+        #expect(try book("1", context).rating == 4)
+        try book("1", context).rating = 3.5
+        _ = try apply([item("1", readAt: "2026/10/03", rating: 3)], .read, context)
+        #expect(try book("1", context).rating == 3.5)
+    }
+
+    @Test func undatedReadsAreSkipped() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        _ = try apply([item("old")], .read, context)
+        #expect(try context.fetchCount(FetchDescriptor<Book>()) == 0)
+    }
+
+    @Test func handEditedDatesAreKept() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        _ = try apply([item("1", added: day("2026/10/01"))], .currentlyReading, context)
+        let reading = try #require(try book("1", context).readings?.first)
+        reading.datesEditedManually = true
+        _ = try apply([item("1", readAt: "2026/10/09")], .read, context)
+        #expect(reading.finishedAt == nil)
+    }
+
+    @Test func manualCoversAreNeverReplaced() throws {
+        let book = Book(title: "x", author: "y")
+        book.coverSource = .manual
+        #expect(!FeedApplier.wantsGoodreadsCover(book))
+        book.coverSource = .openLibrary
+        #expect(FeedApplier.wantsGoodreadsCover(book))
+    }
+}
+
+@MainActor
+struct CoverStoreTests {
+    /// Regression: the App Group path contains a space ("Group Containers"),
+    /// which a percent-encoded path check treated as missing.
+    @Test func detectsSavedCoverInSharedContainer() throws {
+        let book = Book(title: "Test", author: "Test")
+        book.goodreadsID = "test-\(UUID().uuidString)"
+        #expect(AmarisStore.coversDirectory.path(percentEncoded: false).contains(" "))
+        #expect(!CoverStore.hasCover(for: book))
+
+        let pixel = try #require(Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="))
+        try CoverStore.save(pixel, for: book, source: .goodreads)
+        defer { try? FileManager.default.removeItem(at: CoverStore.url(for: book)!) }
+
+        #expect(CoverStore.hasCover(for: book))
+        #expect(book.coverSource == .goodreads)
+        #expect(!FeedApplier.wantsGoodreadsCover(book))   // no re-download
+    }
+}

@@ -24,6 +24,14 @@ enum DataSource: String, Codable {
     case manual
 }
 
+/// Where a cached cover came from. Goodreads covers match the edition I
+/// shelved; Open Library is the fallback; manual covers are never replaced.
+enum CoverSource: String, Codable {
+    case goodreads
+    case openLibrary
+    case manual
+}
+
 @Model
 final class Book {
     var goodreadsID: String?
@@ -39,6 +47,7 @@ final class Book {
 
     /// File name of the locally cached cover inside the App Group container.
     var coverFileName: String?
+    var coverSourceRaw: String?
 
     // Stored as a raw string so SwiftData can persist and query it.
     var statusRaw: String = BookStatus.reading.rawValue
@@ -52,6 +61,11 @@ final class Book {
     var status: BookStatus {
         get { BookStatus(rawValue: statusRaw) ?? .reading }
         set { statusRaw = newValue.rawValue }
+    }
+
+    var coverSource: CoverSource? {
+        get { coverSourceRaw.flatMap(CoverSource.init(rawValue:)) }
+        set { coverSourceRaw = newValue?.rawValue }
     }
 
     init(title: String, author: String, status: BookStatus = .reading) {

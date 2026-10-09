@@ -42,12 +42,9 @@ final class CoverFetcher {
 
         // Sequential on purpose: Open Library rate-limits ISBN lookups.
         for book in missing {
-            if let data = await downloadCover(isbn: book.isbn13, title: book.title, author: book.author) {
-                let fileName = CoverStore.fileName(for: book)
-                if (try? data.write(to: AmarisStore.coversDirectory.appending(path: fileName))) != nil {
-                    book.coverFileName = fileName
-                    found += 1
-                }
+            if let data = await downloadCover(isbn: book.isbn13, title: book.title, author: book.author),
+               (try? CoverStore.save(data, for: book, source: .openLibrary)) != nil {
+                found += 1
             }
             completed += 1
             if completed.isMultiple(of: 10) { try? context.save() }
@@ -88,7 +85,7 @@ final class CoverFetcher {
     }
 
     /// Returns the data only if it's a real image (not an error page or 1×1 placeholder).
-    private func fetchImage(_ url: URL) async -> Data? {
+    func fetchImage(_ url: URL) async -> Data? {
         guard let (data, response) = try? await session.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
