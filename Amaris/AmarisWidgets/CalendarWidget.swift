@@ -122,7 +122,7 @@ struct CalendarWidgetView: View {
                 .padding(.bottom, 8)
                 .background(Gingham())
                 ScallopEdge(scallopWidth: 14)
-                    .fill(Color(hex: 0xFDE9EF))
+                    .fill(Color(hex: 0xF8DAE3))
                     .frame(height: 7)
             }
         case .alchemy:

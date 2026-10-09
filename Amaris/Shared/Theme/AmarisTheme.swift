@@ -48,11 +48,11 @@ nonisolated extension AmarisTheme {
         switch self {
         case .ouabh:
             ThemePalette(
-                paper: Color(hex: 0xFFF9F5), paperDeep: Color(hex: 0xFBE3EA),
-                ink: Color(hex: 0x4A2B35), muted: Color(hex: 0x8D6B76),
+                paper: Color(hex: 0xFBEDF0), paperDeep: Color(hex: 0xF9DDE5),
+                ink: Color(hex: 0x4A2B35), muted: Color(hex: 0x82606C),
                 accent: Color(hex: 0xE46F95), accentText: Color(hex: 0xB4466C),
                 soft: Color(hex: 0xF2B7C9),
-                emptyDay: Color(hex: 0xFCF0F2), emptyDayStroke: Color(hex: 0xF1CBD6),
+                emptyDay: Color(hex: 0xFFF7F9), emptyDayStroke: Color(hex: 0xEDBFCD),
                 line: Color(hex: 0xF2B7C9)
             )
         case .alchemy:

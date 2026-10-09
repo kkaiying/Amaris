@@ -193,7 +193,7 @@ struct WashiTape: View {
 /// Pink-and-cream gingham.
 struct Gingham: View {
     var color: Color = Color(hex: 0xE46F95)
-    var base: Color = Color(hex: 0xFDE9EF)
+    var base: Color = Color(hex: 0xF8DAE3)
     var square: CGFloat = 9
 
     var body: some View {

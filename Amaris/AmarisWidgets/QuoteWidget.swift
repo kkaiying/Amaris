@@ -215,7 +215,7 @@ struct QuoteWidgetView: View {
                 .frame(width: 32, height: 32)
                 .background {
                     if theme == .ouabh {
-                        Circle().fill(Color(hex: 0xFDEEF2)).overlay(Circle().stroke(palette.soft, lineWidth: 1.3))
+                        Circle().fill(Color(hex: 0xFFF7F9)).overlay(Circle().stroke(palette.soft, lineWidth: 1.3))
                     } else {
                         Circle().stroke(palette.accent, lineWidth: 1)
                     }
