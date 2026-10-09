@@ -18,6 +18,15 @@ final class AppModel {
     var isImportingCSV = false
     var message: String?
 
+    /// The Add Quotes sheet, optionally preselecting a book.
+    var isAddingQuotes = false
+    private(set) var addQuotesBook: Book?
+
+    func startAddingQuotes(for book: Book? = nil) {
+        addQuotesBook = book
+        isAddingQuotes = true
+    }
+
     var isBusy: Bool { goodreads.isSyncing || coverFetcher.isRunning }
 
     /// Goodreads first (covers match my editions), then Open Library for any gaps.

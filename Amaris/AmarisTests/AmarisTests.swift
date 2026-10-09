@@ -373,3 +373,19 @@ struct ShelfChangeTests {
         #expect(book.latestReading?.finishedAt == day("2026/10/08"))
     }
 }
+
+struct PastedQuotesTests {
+    @Test func blankLinesSeparateQuotes() {
+        let pasted = "“First quote.”\n\n“Second quote,\nsame quote, new line.”\n \n\n\nThird.\r\n\r\nFourth."
+        #expect(QuoteExtractor.quotes(fromPastedText: pasted) == [
+            "“First quote.”",
+            "“Second quote,\nsame quote, new line.”",
+            "Third.",
+            "Fourth.",
+        ])
+    }
+
+    @Test func emptyPasteGivesNoQuotes() {
+        #expect(QuoteExtractor.quotes(fromPastedText: "  \n\n ").isEmpty)
+    }
+}

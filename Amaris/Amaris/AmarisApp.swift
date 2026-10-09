@@ -19,6 +19,10 @@ struct AmarisApp: App {
         }
         .modelContainer(AmarisStore.shared)
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Add Quotes…") { model.startAddingQuotes() }
+                    .keyboardShortcut("n")
+            }
             CommandGroup(after: .importExport) {
                 Button("Import Goodreads CSV…") { model.isImportingCSV = true }
             }

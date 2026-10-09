@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 struct BookDetailView: View {
     @Bindable var book: Book
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
 
     @State private var isChoosingCover = false
     @State private var coverError: String?
@@ -61,10 +62,18 @@ struct BookDetailView: View {
                         Text("No quotes yet.").foregroundStyle(.secondary)
                     }
                     ForEach(quotes) { quote in
-                        Text(quote.text)
-                            .textSelection(.enabled)
-                            .padding(.vertical, 2)
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(quote.text)
+                                .font(.system(.body, design: .serif))
+                                .textSelection(.enabled)
+                            Spacer()
+                            if quote.isFavourite {
+                                Image(systemName: "heart.fill").foregroundStyle(.pink)
+                            }
+                        }
+                        .padding(.vertical, 2)
                     }
+                    Button("Add Quotes…") { model.startAddingQuotes(for: book) }
                 }
             }
             .formStyle(.grouped)

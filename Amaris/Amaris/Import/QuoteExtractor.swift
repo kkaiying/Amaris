@@ -32,6 +32,14 @@ nonisolated enum QuoteExtractor {
         return result
     }
 
+    /// Splits pasted text into quotes: a blank line separates one quote from the next.
+    static func quotes(fromPastedText text: String) -> [String] {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: /\n[ \t]*\n\s*/)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     /// Decodes the HTML entities Goodreads uses in review text.
     static func decodeEntities(_ text: String) -> String {
         guard text.contains("&") else { return text }

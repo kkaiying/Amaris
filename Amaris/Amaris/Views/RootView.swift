@@ -49,7 +49,7 @@ struct RootView: View {
                 case .library:
                     LibraryView()
                 case .quotes:
-                    ComingSoonView(item: .quotes)
+                    QuotesView()
                 case .calendar:
                     ComingSoonView(item: .calendar)
                 }
@@ -60,6 +60,9 @@ struct RootView: View {
         // the Goodreads account changes.
         .task(id: model.goodreads.userID) {
             await model.syncPeriodically(in: context)
+        }
+        .sheet(isPresented: $model.isAddingQuotes) {
+            AddQuotesSheet(initialBook: model.addQuotesBook)
         }
         .fileImporter(isPresented: $model.isImportingCSV,
                       allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
