@@ -61,7 +61,12 @@ enum CoverStore {
     nonisolated(unsafe) private static let thumbnails = NSCache<NSString, CGImage>()
 
     static func thumbnail(for book: Book, maxPixelSize: Int) -> CGImage? {
-        guard let fileName = book.coverFileName, let url = url(for: book) else { return nil }
+        thumbnail(fileName: book.coverFileName, maxPixelSize: maxPixelSize)
+    }
+
+    static func thumbnail(fileName: String?, maxPixelSize: Int) -> CGImage? {
+        guard let fileName else { return nil }
+        let url = AmarisStore.coversDirectory.appending(path: fileName)
         let key = "\(fileName)@\(maxPixelSize)" as NSString
         if let cached = thumbnails.object(forKey: key) { return cached }
 
@@ -92,11 +97,22 @@ struct CoverImage: View {
 
 /// The cover filling whatever space it's given (cropped), e.g. a calendar day.
 struct CoverArt: View {
-    let book: Book
+    let fileName: String?
+    let title: String
     var maxPixelSize = 600
 
+    init(book: Book, maxPixelSize: Int = 600) {
+        self.init(fileName: book.coverFileName, title: book.displayTitle, maxPixelSize: maxPixelSize)
+    }
+
+    init(fileName: String?, title: String, maxPixelSize: Int = 600) {
+        self.fileName = fileName
+        self.title = title
+        self.maxPixelSize = maxPixelSize
+    }
+
     var body: some View {
-        if let image = CoverStore.thumbnail(for: book, maxPixelSize: maxPixelSize) {
+        if let image = CoverStore.thumbnail(fileName: fileName, maxPixelSize: maxPixelSize) {
             Color.clear
                 .overlay {
                     Image(decorative: image, scale: 1)
@@ -107,7 +123,7 @@ struct CoverArt: View {
         } else {
             ZStack {
                 Rectangle().fill(.quaternary)
-                Text(book.displayTitle)
+                Text(title)
                     .font(.caption2)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)

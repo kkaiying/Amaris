@@ -10,8 +10,14 @@ import SwiftUI
 
 @main
 struct AmarisWidgetsBundle: WidgetBundle {
+    init() {
+        AmarisFonts.register()
+    }
+
     var body: some Widget {
-        AmarisWidgets()
-        AmarisWidgetsControl()
+        CalendarWidget()
+        QuoteWidget()
+        ReadingNowWidget()
+        YearWidget()
     }
 }

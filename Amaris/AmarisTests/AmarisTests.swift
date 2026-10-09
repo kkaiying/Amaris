@@ -482,3 +482,20 @@ struct ShelfPageImportTests {
         #expect(book.readings?.first?.startedAt == day("2026/10/03"))
     }
 }
+
+struct WidgetHelperTests {
+    @Test func romanNumerals() {
+        #expect(RomanNumeral.string(5) == "V")
+        #expect(RomanNumeral.string(30) == "XXX")
+        #expect(RomanNumeral.string(2026) == "MMXXVI")
+        #expect(RomanNumeral.string(49) == "XLIX")
+    }
+
+    @Test func quoteRotationIsStableAndCoversEveryQuote() {
+        let order = QuoteRotation.shuffledOrder(count: 10)
+        #expect(order == QuoteRotation.shuffledOrder(count: 10))
+        #expect(Set(order) == Set(0..<10))
+        #expect(QuoteRotation.nextChange(after: Date(timeIntervalSinceReferenceDate: 3600 * 5 + 10))
+                == Date(timeIntervalSinceReferenceDate: 3600 * 6))
+    }
+}

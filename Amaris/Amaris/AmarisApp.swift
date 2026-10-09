@@ -12,6 +12,10 @@ import SwiftData
 struct AmarisApp: App {
     @State private var model = AppModel()
 
+    init() {
+        AmarisFonts.register()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

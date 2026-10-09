@@ -61,6 +61,10 @@ struct RootView: View {
         .task(id: model.goodreads.userID) {
             await model.syncPeriodically(in: context)
         }
+        // Any saved change (sync, import, quotes, edits) refreshes the widgets.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            WidgetData.reloadWidgets()
+        }
         .sheet(isPresented: $model.isAddingQuotes) {
             AddQuotesSheet(initialBook: model.addQuotesBook)
         }
