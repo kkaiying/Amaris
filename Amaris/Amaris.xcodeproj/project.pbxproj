@@ -79,6 +79,11 @@
 			path = AmarisWidgets;
 			sourceTree = "<group>";
 		};
+		3DB3CCD330790DE800F73A4A /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		3DF9C968307904AB00A00ABC /* Amaris */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Amaris;
@@ -142,6 +147,7 @@
 		3DF9C95D307904AB00A00ABC = {
 			isa = PBXGroup;
 			children = (
+				3DB3CCD330790DE800F73A4A /* Shared */,
 				3DB3CCB730790A6200F73A4A /* AmarisWidgetsExtension.entitlements */,
 				3DF9C968307904AB00A00ABC /* Amaris */,
 				3DF9C976307904B000A00ABC /* AmarisTests */,
@@ -180,6 +186,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				3DB3CCA23079096800F73A4A /* AmarisWidgets */,
+				3DB3CCD330790DE800F73A4A /* Shared */,
 			);
 			name = AmarisWidgetsExtension;
 			packageProductDependencies = (
@@ -203,6 +210,7 @@
 				3DB3CCAF3079096A00F73A4A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				3DB3CCD330790DE800F73A4A /* Shared */,
 				3DF9C968307904AB00A00ABC /* Amaris */,
 			);
 			name = Amaris;

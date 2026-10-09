@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct AmarisApp: App {
@@ -13,5 +14,6 @@ struct AmarisApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(AmarisStore.shared)
     }
 }

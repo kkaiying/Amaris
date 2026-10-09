@@ -96,11 +96,11 @@ Data lives in `~/Library/Containers/com.amazon.Lassen/Data/Library/`. **Read-onl
 | Table | Columns | Notes |
 |---|---|---|
 | **books** | `id`, `goodreads_id`, `kindle_book_id` (nullable), `isbn13`, `title`, `author`, `cover_url` / `cover_path`, `page_count`, `rating` (decimal: Goodreads allows quarter stars, e.g. 3.25, 3.5, 3.75; 0 = unrated), `status` (`reading` / `read` / `dnf`), `spine_color` _(later)_ | One row per book |
-| **reads** | `id`, `book_id`, `started_at`, `finished_at` (null while reading), `ended_reason` (`finished` / `dnf`), `start_is_estimated`, `source` (`goodreads_csv` / `goodreads_rss` / `manual`) | **Drives the calendar.** Several per book allowed (re-reads) |
+| **readings** (`Reading` model) | `id`, `book_id`, `started_at`, `finished_at` (null while reading), `outcome` (`read` / `dnf`), `start_is_estimated`, `dates_edited_manually`, `source` (`goodreads_csv` / `goodreads_rss` / `manual`) | **Drives the calendar.** Several per book allowed (re-reads) |
 | **quotes** | `id`, `book_id`, `text`, `source` (`goodreads` / `manual`), `is_favourite`, `created_at`, `last_shown_at` | `last_shown_at` keeps rotation fair |
 | **progress_log** _(later)_ | `book_id`, `observed_at`, `position`, `max_position` | Feature 2 only. Append-only, rows written on change |
 
-**Calendar query:** for each day of the month, return every `read` where `started_at ≤ day ≤ (finished_at ?? today)`.
+**Calendar query:** for each day of the month, return every `reading` where `started_at ≤ day ≤ (finished_at ?? today)`.
 
 **Dedup on sync:** match Goodreads RSS items to `books` by `goodreads_id`. Never overwrite a date I've edited manually.
 
