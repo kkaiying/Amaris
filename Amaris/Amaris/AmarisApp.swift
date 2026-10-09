@@ -25,6 +25,7 @@ struct AmarisApp: App {
             }
             CommandGroup(after: .importExport) {
                 Button("Import Goodreads CSV…") { model.isImportingCSV = true }
+                Button("Import Start Dates from Goodreads Page…") { model.isImportingShelfPage = true }
             }
         }
 

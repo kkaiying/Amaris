@@ -192,7 +192,11 @@ enum GoodreadsImporter {
         let readings = book.readings ?? []
         if let existing = readings.first(where: { $0.source == .goodreadsCSV }) {
             guard !existing.datesEditedManually else { return false }
-            existing.startedAt = span.start
+            // Only replace a start date that is still a guess; real ones come
+            // from the shelf page import or the Goodreads feed.
+            if existing.startIsEstimated {
+                existing.startedAt = span.start
+            }
             existing.finishedAt = span.finish
             existing.outcome = span.finish == nil ? nil : status
             return false

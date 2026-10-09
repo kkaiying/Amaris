@@ -55,42 +55,65 @@ enum CoverStore {
         guard let url = url(for: book) else { return false }
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
     }
+
+    /// Thumbnails decoded once and reused. A year calendar shows hundreds of
+    /// small covers, so full-size images would use far too much memory.
+    nonisolated(unsafe) private static let thumbnails = NSCache<NSString, CGImage>()
+
+    static func thumbnail(for book: Book, maxPixelSize: Int) -> CGImage? {
+        guard let fileName = book.coverFileName, let url = url(for: book) else { return nil }
+        let key = "\(fileName)@\(maxPixelSize)" as NSString
+        if let cached = thumbnails.object(forKey: key) { return cached }
+
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        thumbnails.setObject(image, forKey: key)
+        return image
+    }
 }
 
+/// A book cover at 2:3, or a placeholder with the title.
 struct CoverImage: View {
     let book: Book
+    /// Decode size; the default suits the library grid and book pages.
+    var maxPixelSize = 600
 
     var body: some View {
-        Group {
-            if let image = loadImage() {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                placeholder
+        CoverArt(book: book, maxPixelSize: maxPixelSize)
+            .aspectRatio(2 / 3, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+}
+
+/// The cover filling whatever space it's given (cropped), e.g. a calendar day.
+struct CoverArt: View {
+    let book: Book
+    var maxPixelSize = 600
+
+    var body: some View {
+        if let image = CoverStore.thumbnail(for: book, maxPixelSize: maxPixelSize) {
+            Color.clear
+                .overlay {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+                .clipped()
+        } else {
+            ZStack {
+                Rectangle().fill(.quaternary)
+                Text(book.displayTitle)
+                    .font(.caption2)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(4)
+                    .minimumScaleFactor(0.5)
             }
         }
-        .aspectRatio(2 / 3, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 4).fill(.quaternary)
-            Text(book.title)
-                .font(.caption2)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(4)
-        }
-    }
-
-    private func loadImage() -> Image? {
-        guard let url = CoverStore.url(for: book) else { return nil }
-        #if canImport(AppKit)
-        return NSImage(contentsOf: url).map(Image.init(nsImage:))
-        #else
-        return UIImage(contentsOfFile: url.path(percentEncoded: false)).map(Image.init(uiImage:))
-        #endif
     }
 }

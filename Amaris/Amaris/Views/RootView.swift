@@ -51,7 +51,7 @@ struct RootView: View {
                 case .quotes:
                     QuotesView()
                 case .calendar:
-                    ComingSoonView(item: .calendar)
+                    CalendarView()
                 }
             }
         }
@@ -68,6 +68,10 @@ struct RootView: View {
                       allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
             guard case .success(let url) = result else { return }
             Task { await model.importCSV(from: url, into: context) }
+        }
+        .fileImporter(isPresented: $model.isImportingShelfPage, allowedContentTypes: [.html]) { result in
+            guard case .success(let url) = result else { return }
+            model.importStartDates(from: url, into: context)
         }
     }
 }
@@ -108,15 +112,5 @@ private struct SyncStatusView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct ComingSoonView: View {
-    let item: SidebarItem
-
-    var body: some View {
-        ContentUnavailableView(item.title, systemImage: item.systemImage,
-                               description: Text("Coming soon."))
-            .navigationTitle(item.title)
     }
 }

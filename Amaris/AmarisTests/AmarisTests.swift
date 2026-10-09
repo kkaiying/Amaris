@@ -389,3 +389,96 @@ struct PastedQuotesTests {
         #expect(QuoteExtractor.quotes(fromPastedText: "  \n\n ").isEmpty)
     }
 }
+
+@MainActor
+struct ReadingCalendarTests {
+    @Test func fillsEveryDayFromStartToFinishAndOpenReadingsThroughToday() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let first = Book(title: "First", author: "A")
+        let second = Book(title: "Second", author: "B")
+        context.insert(first)
+        context.insert(second)
+        let finished = Reading(book: first, startedAt: day("2026/10/01"), finishedAt: day("2026/10/05"), source: .manual)
+        let open = Reading(book: second, startedAt: day("2026/10/05"), source: .manual)
+        context.insert(finished)
+        context.insert(open)
+
+        let october = ReadingCalendar.month(containing: day("2026/10/15"))
+        let days = ReadingCalendar.booksByDay([finished, open], in: october, today: day("2026/10/09"))
+
+        #expect(days[day("2026/09/30")] == nil)
+        #expect(days[day("2026/10/01")]?.map(\.title) == ["First"])
+        #expect(days[day("2026/10/05")]?.map(\.title) == ["First", "Second"])   // overlap: both
+        #expect(days[day("2026/10/09")]?.map(\.title) == ["Second"])            // through today
+        #expect(days[day("2026/10/10")] == nil)
+        #expect(days.count == 9)
+    }
+
+    @Test func clipsSpansToTheRequestedInterval() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let book = Book(title: "Long", author: "A")
+        context.insert(book)
+        let reading = Reading(book: book, startedAt: day("2025/12/20"), finishedAt: day("2026/01/03"), source: .manual)
+        context.insert(reading)
+
+        let days = ReadingCalendar.booksByDay([reading], in: ReadingCalendar.year(containing: day("2026/06/01")))
+        #expect(days.keys.sorted() == [day("2026/01/01"), day("2026/01/02"), day("2026/01/03")])
+    }
+}
+
+@MainActor
+struct ShelfPageImportTests {
+    // Trimmed from the real page's markup, with a duplicated session like the real one.
+    let html = """
+    <table><tr id="review_1" class="bookalike review">
+      <td class="field date_started"><span class="date_started_value">Oct 03, 2026</span>
+        <a onclick="reviewEditor.summon(this, 111, 'started_at', {value: &quot;2026-10-03&quot;, reading_session_id: &quot;x&quot;})">edit</a></td>
+      <td class="field date_read"><span class="date_read_value">Oct 05, 2026</span>
+        <a onclick="reviewEditor.summon(this, 111, 'read_at', {value: &quot;2026-10-05&quot;, reading_session_id: &quot;x&quot;})">edit</a></td>
+    </tr>
+    <tr id="review_2" class="bookalike review">
+      <a onclick="reviewEditor.summon(this, 222, 'started_at', {value: &quot;2025-05-30&quot;})"></a>
+      <a onclick="reviewEditor.summon(this, 222, 'started_at', {value: &quot;2025-05-30&quot;})"></a>
+      <a onclick="reviewEditor.summon(this, 222, 'read_at', {value: &quot;2025-06-10&quot;})"></a>
+      <a onclick="reviewEditor.summon(this, 222, 'read_at', {value: &quot;2025-06-10&quot;})"></a>
+    </tr></table>
+    """
+
+    @Test func parsesSessionsPerBook() {
+        let sessions = GoodreadsShelfPage.sessions(fromHTML: html)
+        #expect(sessions["111"] == [.init(started: day("2026/10/03"), finished: day("2026/10/05"))])
+        #expect(sessions["222"] == [.init(started: day("2025/05/30"), finished: day("2025/06/10"))])  // deduplicated
+    }
+
+    @Test func replacesEstimatesButKeepsManualEdits() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let first = Book(title: "A", author: "A"); first.goodreadsID = "111"
+        let second = Book(title: "B", author: "B"); second.goodreadsID = "222"
+        context.insert(first); context.insert(second)
+        let estimated = Reading(book: first, startedAt: day("2026/09/30"), finishedAt: day("2026/10/05"), source: .goodreadsCSV)
+        estimated.startIsEstimated = true
+        let edited = Reading(book: second, startedAt: day("2025/06/01"), finishedAt: day("2025/06/10"), source: .goodreadsCSV)
+        edited.datesEditedManually = true
+        context.insert(estimated); context.insert(edited)
+
+        let summary = try StartDateImporter.apply(GoodreadsShelfPage.sessions(fromHTML: html), to: context)
+        #expect(summary == StartDateSummary(updated: 1, alreadyCorrect: 0, keptManualEdits: 1))
+        #expect(estimated.startedAt == day("2026/10/03"))
+        #expect(!estimated.startIsEstimated)
+        #expect(edited.startedAt == day("2025/06/01"))
+    }
+
+    @Test func csvReimportKeepsRealStartDates() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let csv = """
+        Book Id,Title,Author,ISBN13,My Rating,Number of Pages,Date Read,Exclusive Shelf,My Review
+        111,A,A,,0,,2026/10/05,read,
+        """
+        _ = try GoodreadsImporter.importCSV(csv, into: context, today: day("2026/10/09"))
+        _ = try StartDateImporter.apply(GoodreadsShelfPage.sessions(fromHTML: html), to: context)
+        _ = try GoodreadsImporter.importCSV(csv, into: context, today: day("2026/10/09"))
+
+        let book = try #require(try context.fetch(FetchDescriptor<Book>()).first)
+        #expect(book.readings?.first?.startedAt == day("2026/10/03"))
+    }
+}

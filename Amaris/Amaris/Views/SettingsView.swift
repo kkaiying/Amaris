@@ -44,10 +44,11 @@ struct SettingsView: View {
 
             Section {
                 Button("Import Goodreads CSV…") { model.isImportingCSV = true }
+                Button("Import Start Dates from Goodreads Page…") { model.isImportingShelfPage = true }
             } header: {
                 Text("Import")
             } footer: {
-                Text("Goodreads → My Books → Import and export → Export Library. Safe to run again: nothing is duplicated and your edits are kept.")
+                Text("CSV: Goodreads → My Books → Import and export → Export Library. The export has no start dates, so for those save your Read shelf in table view (with the \u{201C}date started\u{201D} column) as HTML and import that page. Both are safe to run again: nothing is duplicated and your edits are kept.")
                     .foregroundStyle(.secondary)
             }
         }

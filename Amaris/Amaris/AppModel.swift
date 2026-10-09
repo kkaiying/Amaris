@@ -16,6 +16,7 @@ final class AppModel {
 
     /// Set from the File menu; the main window shows the file picker.
     var isImportingCSV = false
+    var isImportingShelfPage = false
     var message: String?
 
     /// The Add Quotes sheet, optionally preselecting a book.
@@ -59,6 +60,26 @@ final class AppModel {
             let summary = try GoodreadsImporter.importCSV(text, into: context)
             await syncNow(in: context)
             message = "Imported \(summary.booksAdded) new books and \(summary.quotesAdded) quotes."
+        } catch {
+            message = "Import failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Fills in real start dates from a saved Goodreads shelf page (HTML).
+    func importStartDates(from url: URL, into context: ModelContext) {
+        do {
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+            let html = try String(contentsOf: url, encoding: .utf8)
+            let sessions = GoodreadsShelfPage.sessions(fromHTML: html)
+            guard !sessions.isEmpty else {
+                message = "No start dates found. Save the shelf page with the \u{201C}date started\u{201D} column visible."
+                return
+            }
+            let summary = try StartDateImporter.apply(sessions, to: context)
+            message = "Start dates: \(summary.updated) updated, \(summary.alreadyCorrect) already correct"
+                + (summary.keptManualEdits > 0 ? ", \(summary.keptManualEdits) kept (edited by you)." : ".")
         } catch {
             message = "Import failed: \(error.localizedDescription)"
         }
