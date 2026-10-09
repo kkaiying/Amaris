@@ -11,6 +11,9 @@
 //  - `user_read_at` on read = the "date read" → finish date (midnight UTC).
 //  - `user_rating` is rounded to whole stars, so it must not overwrite a precise rating.
 //  - `book_large_image_url` has a size suffix (._SY475_); removing it gives the original.
+//  - Single-shelf feeds can lag behind Goodreads by hours, but the #ALL# feed is
+//    current, so sync reads that. Its `user_shelves` lists currently-reading,
+//    did-not-finish, to-read and custom shelves, but leaves "read" blank.
 //
 
 import Foundation
@@ -24,6 +27,15 @@ nonisolated struct FeedItem: Equatable {
     var dateAdded: Date?
     var rating: Int?
     var pageCount: Int?
+    var shelves: [String] = []
+
+    /// The exclusive shelf this book is on, or nil for to-read.
+    var shelf: Shelf? {
+        if shelves.contains(Shelf.currentlyReading.rawValue) { return .currentlyReading }
+        if shelves.contains(Shelf.didNotFinish.rawValue) { return .didNotFinish }
+        if shelves.contains("to-read") { return nil }
+        return .read
+    }
 }
 
 nonisolated enum Shelf: String, CaseIterable {
@@ -43,19 +55,25 @@ nonisolated enum GoodreadsFeed {
         return nil
     }
 
-    static func url(userID: String, shelf: Shelf, page: Int) -> URL {
+    static func url(userID: String, shelf: String, page: Int) -> URL {
         var components = URLComponents(string: "https://www.goodreads.com/review/list_rss/\(userID)")!
         components.queryItems = [
-            URLQueryItem(name: "shelf", value: shelf.rawValue),
+            URLQueryItem(name: "shelf", value: shelf),
             URLQueryItem(name: "page", value: String(page)),
         ]
         return components.url!
     }
 
+    /// Fetches every book on every shelf, grouped by exclusive shelf (to-read left out).
+    static func fetchAllShelves(userID: String, session: URLSession) async throws -> [Shelf: [FeedItem]] {
+        let items = try await fetchShelf("#ALL#", userID: userID, session: session)
+        return Dictionary(grouping: items.filter { $0.shelf != nil }) { $0.shelf! }
+    }
+
     /// Fetches every page of a shelf.
-    static func fetchShelf(_ shelf: Shelf, userID: String, session: URLSession) async throws -> [FeedItem] {
+    static func fetchShelf(_ shelf: String, userID: String, session: URLSession) async throws -> [FeedItem] {
         var all: [FeedItem] = []
-        for page in 1...20 {
+        for page in 1...50 {
             let (data, response) = try await session.data(from: url(userID: userID, shelf: shelf, page: page))
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 throw URLError(.badServerResponse)
@@ -87,7 +105,8 @@ nonisolated enum GoodreadsFeed {
             readAt: fields["user_read_at"].flatMap(calendarDay),
             dateAdded: fields["user_date_added"].flatMap(rfc822),
             rating: fields["user_rating"].flatMap { Int($0.trimmed) }.flatMap { $0 > 0 ? $0 : nil },
-            pageCount: fields["num_pages"].flatMap { Int($0.trimmed) }
+            pageCount: fields["num_pages"].flatMap { Int($0.trimmed) },
+            shelves: (fields["user_shelves"] ?? "").split(separator: ",").map { String($0).trimmed }
         )
     }
 

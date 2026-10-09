@@ -218,6 +218,18 @@ struct GoodreadsFeedTests {
         #expect(items[1].readAt == nil)
     }
 
+    @Test func sortsAllShelvesFeedOntoShelves() {
+        func shelf(_ shelves: String) -> Shelf? {
+            GoodreadsFeed.item(from: ["book_id": "1", "user_shelves": shelves])?.shelf
+        }
+        #expect(shelf("currently-reading") == .currentlyReading)
+        #expect(shelf("did-not-finish") == .didNotFinish)
+        #expect(shelf("to-read") == nil)
+        #expect(shelf("") == .read)             // "read" is left blank
+        #expect(shelf("my-loves") == .read)     // custom shelves sit alongside read
+        #expect(shelf("my-loves, currently-reading") == .currentlyReading)
+    }
+
     @Test func readsUserIDFromProfileLink() {
         #expect(GoodreadsFeed.userID(from: "https://www.goodreads.com/user/show/156605841-lin") == "156605841")
         #expect(GoodreadsFeed.userID(from: " 156605841 ") == "156605841")

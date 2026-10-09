@@ -169,10 +169,10 @@ final class GoodreadsSync {
         do {
             var summary = SyncSummary()
             var covers: [FeedApplier.CoverRequest] = []
+            let shelves = try await GoodreadsFeed.fetchAllShelves(userID: userID, session: session)
             // Order matters: start books before finishing them.
             for shelf in [Shelf.currentlyReading, .read, .didNotFinish] {
-                let items = try await GoodreadsFeed.fetchShelf(shelf, userID: userID, session: session)
-                covers += try FeedApplier.apply(items, shelf: shelf, to: context, summary: &summary)
+                covers += try FeedApplier.apply(shelves[shelf] ?? [], shelf: shelf, to: context, summary: &summary)
             }
             try context.save()
 
