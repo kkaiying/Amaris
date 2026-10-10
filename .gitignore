@@ -12,3 +12,6 @@ data/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# App icon artwork is an artist's work (@margi), not mine to publish
+Amaris/Amaris/Assets.xcassets/AppIcon.appiconset/*.png
