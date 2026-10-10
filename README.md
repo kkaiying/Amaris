@@ -1,66 +1,80 @@
 # Amaris
 
-A macOS reading tracker with desktop widgets. It shows a calendar with the cover of whatever I was reading on each day, and rotates through my favourite quotes from books. Named after Amaris from *Alchemised*, my favourite read of 2026.
+Amaris is a macOS reading tracker built around desktop widgets. It keeps a record of every book read, shows a calendar in which each day carries the cover of the book being read at the time, and rotates through a personal collection of favourite quotes. The app takes its name from Amaris, a character in *Alchemised*.
 
-I built it because I track every book on Goodreads but wanted something more personal and visual on my desktop. Goodreads shows lists and numbers. I wanted to *see* my year of reading.
+The project began as a personal tool. Goodreads works well for logging books but presents reading history as lists and numbers. Amaris uses the same data to give a more visual picture of a year of reading, placed where it is seen every day: on the desktop.
 
-## What it does
+## Features
 
-**App**
-- **Library:** every book I've read, am reading, or didn't finish (DNF), grouped by year, with covers, ratings (including quarter stars), and editable start and finish dates.
-- **Reading calendar:** a full-year view in which each day shows the cover of the book I was reading, from its start date to its finish date. If two books overlap, both covers appear.
-- **Quotes:** a library of favourite quotes. I paste several at once and they're split automatically. I can favourite, edit, merge (for a quote that got split in two) and delete them.
-- **Goodreads sync:** I keep using Goodreads as normal. Amaris syncs every hour and when the Mac wakes, and starts, finishes or DNFs books to match.
-- **Runs in the background:** it opens at login with no window and lives in the menu bar, so syncing continues without the app being open.
+### The app
 
-**Desktop widgets** (WidgetKit)
-- **Reading Calendar** (large): this month, with a cover on every reading day.
-- **Quote** (medium): a saved quote that changes every hour, with a *next* button that works directly on the widget. It can show all quotes or favourites only, with optional faint fan art behind it.
-- **Reading Now** (small): the current book and how many days I've been reading it.
-- **Year** (small): books finished this year.
+The **Library** lists every book that has been read, is in progress, or was not finished (DNF), grouped by year. Each book has its cover, a rating that supports quarter stars, and start and finish dates that can be edited.
 
-Each widget can use either of two visual themes I designed:
-- **Once Upon a Broken Heart:** pink and whimsical, with washi tape on tilted covers, a gingham header and hand-drawn doodles.
-- **Alchemy:** near-black with gold linework, transmutation-circle details, serif type and Roman numerals.
+The **Calendar** shows a full year. A book's cover fills every day from its start date to its finish date, or up to today if it is still being read. When two books overlap, both covers appear on the shared days.
+
+The **Quotes** section holds saved passages from books. Several quotes can be pasted at once and are separated automatically at blank lines. Quotes can be marked as favourites, edited, merged (for a passage that was split by mistake) or deleted.
+
+Amaris stays in step with **Goodreads** without any extra effort. Books continue to be logged on Goodreads as usual, and Amaris syncs every hour and whenever the Mac wakes, starting, finishing or marking books as DNF to match. The app opens at login without a window and runs from the menu bar, so syncing continues while it is out of the way.
+
+### The widgets
+
+Four desktop widgets are available:
+
+| Widget | Size | Shows |
+| --- | --- | --- |
+| Reading Calendar | Large | The current month, with a cover on each reading day |
+| Quote | Medium | A saved quote that changes every hour, with a button for the next one |
+| Reading Now | Small | The book currently being read and how many days it has been in progress |
+| Year | Small | The number of books finished this year |
+
+The quote widget can show all quotes or favourites only, and can display a faint background image chosen in the app's settings.
+
+Each widget can be set to one of the two visual themes designed so far. **Once Upon a Broken Heart** is pink and playful, with washi tape on tilted covers, a gingham header and small hand-drawn details. **Alchemy** is dark, with gold linework, alchemical circle motifs, serif lettering and Roman numerals.
 
 ## Technical overview
 
-- **Language and frameworks:** Swift, SwiftUI, SwiftData, WidgetKit, App Intents, AppKit and ServiceManagement. About 5,000 lines of Swift.
-- **Architecture:** a macOS app plus a widget extension. They share a SwiftData database and a cover-image cache through an **App Group container**. Code used by both (models, calendar logic, theming, widget data) lives in a shared module. Widgets can't make network requests while drawing, so the app downloads and resizes covers ahead of time and the widgets read them from disk.
-- **Data model:** `Book`, `Reading` (one reading session: start and finish dates, outcome, and flags marking whether the dates were estimated or edited by hand), and `Quote`. It is designed to be compatible with iCloud sync for a future iPhone version.
-- **Tests:** 41 unit tests using Swift Testing. They cover parsing, the backfill rules, sync behaviour, calendar maths, quote rotation and regressions for bugs I found.
+Amaris is written in Swift (about 5,000 lines) using SwiftUI, SwiftData, WidgetKit and App Intents, with AppKit and ServiceManagement for the menu bar and login behaviour. Testing uses Swift Testing.
 
-## Interesting problems
+The project has two parts: the macOS app and a widget extension. Both read the same SwiftData database and cover-image cache, which live in a shared App Group container. Code needed by both, such as the data models, calendar logic, theming and widget data, sits in a shared folder that is compiled into each target. Widgets cannot make network requests while they are drawn, so the app downloads and resizes covers in advance and the widgets read them from disk.
 
-**Goodreads has no public API.** Goodreads closed it in 2020, so I combined three unofficial sources:
-- the **CSV export** for my reading history (finish dates, ratings, reviews),
-- a **saved HTML shelf page**, which I parse for real start dates (the export doesn't include them),
-- the public **RSS feeds**, for ongoing sync and for cover images that match the edition I own.
+The data model has three types. A `Book` holds the details of a title, a `Reading` records a single attempt at it (start and finish dates, whether it was finished or abandoned, and whether the dates were estimated or edited by hand), and a `Quote` belongs to a book. The model is kept compatible with iCloud sync, which would allow an iPhone version later.
 
-**Rebuilding missing history.** For books with no recorded start date, I estimate one: the start is the previous book's finish date, capped at 30 days. Each estimate is flagged, and a later real date (from the HTML import or from editing in the app) always replaces it.
+There are 41 unit tests covering parsing, history reconstruction, sync behaviour, calendar calculations, quote rotation, and regressions for bugs found during development.
 
-**Getting quotes from reviews.** My reviews start with favourite quotes in italics. A parser pulls them out of Goodreads' HTML, which uses inconsistent tag nesting, `<br/>` separators and HTML entities. That produced 32 quotes to start the library.
+## Design notes
 
-**Sync that never undoes my own edits.** Hourly syncing could easily overwrite changes made in the app. I prevent that in two ways:
-- Any date I edit by hand is flagged and never touched again.
-- A book's status only changes when it **moves to a different Goodreads shelf**, so marking a book DNF in the app isn't reverted an hour later.
+### Working without a Goodreads API
 
-**Feeds that lag behind.** The per-shelf RSS feeds turned out to lag behind Goodreads by hours, so finishing a book didn't show up. The all-books feed is up to date, so sync now reads that and works out each book's shelf itself.
+Goodreads closed its public API in 2020, so Amaris draws on three other sources. The CSV export supplies past reading history, including finish dates, ratings and reviews. A saved copy of the Goodreads shelf page supplies the real start dates, which the export leaves out. Finally, the public RSS feeds are used for ongoing sync and for cover images that match the edition on the shelf.
 
-**Covers.** Covers come from Goodreads first, with **Open Library** as a fallback and a manual override (drag and drop or a file picker). Images are resized to keep the widgets light. One bug made every book look like it had no cover: the code checked a percent-encoded file path (`Group%20Containers`), so the two cover sources kept overwriting each other. I fixed it and added a regression test.
+In practice, the feeds for individual shelves lagged behind Goodreads by several hours, so a book that had just been finished did not appear. The feed covering all shelves is current, so Amaris reads that one and works out each book's shelf itself.
 
-**Dates and time zones.** Goodreads stores the "date read" as midnight UTC, which can shift to the previous day in local time. I convert it to a calendar day so a book finished on the 3rd stays on the 3rd.
+### Reconstructing reading history
 
-**Widget design and engineering:**
-- The two themes are built from a shared theme layer: palettes, bundled open-licence fonts, and decorative shapes drawn in SwiftUI.
-- Quote rotation uses a seeded shuffle, so it's stable across widget reloads and the *next* button advances it.
-- Timelines are scheduled to refresh at midnight (calendar) or hourly (quotes).
+Older books often have a finish date but no start date. For these, the start is estimated as the finish date of the previous book, limited to 30 days before the book's own finish. Every estimate is flagged, and a real date always replaces it, whether it comes from the shelf-page import or from an edit in the app.
 
-## Status and next steps
+### Extracting quotes from reviews
 
-I use it daily on my own Mac. Ideas for later:
-- an iPhone version with iCloud sync,
-- a digital bookshelf with spines generated from cover colours and page counts,
-- daily reading progress from the Kindle app's local data.
+Reviews on this account begin with favourite quotes in italics. A parser extracts them from the review HTML, handling inconsistent tag nesting, line-break separators and HTML entities. This provided the first 32 quotes in the library.
 
-`SPEC.md` is the original planning document, written before the build.
+### Keeping manual edits safe during sync
+
+Hourly sync could easily overwrite changes made in the app. Two rules prevent this. Any date edited by hand is flagged and never changed by sync again. A book's status changes only when it moves to a different Goodreads shelf, so marking a book as DNF in the app is not reversed by the next sync.
+
+### Covers
+
+Covers come from Goodreads first, then from Open Library as a fallback, and can be replaced by hand by dragging in an image. Images are resized so the widgets stay light. During development, a percent-encoded file path (`Group%20Containers`) made every cover appear missing, so the two sources kept replacing each other's images. The fix is covered by a regression test.
+
+### Dates and time zones
+
+Goodreads stores the date a book was read as midnight UTC, which can fall on the previous day in local time. Amaris converts it to a plain calendar date, so a book finished on the 3rd always appears on the 3rd.
+
+### Widgets
+
+Both themes are built from a shared theme layer of colour palettes, bundled open-licence fonts, and decorative shapes drawn in SwiftUI. Quotes rotate in a shuffled but fixed order, so the sequence stays the same across widget reloads, and the next-quote button moves it forward. The calendar refreshes at midnight and the quote widget every hour.
+
+## Status
+
+Amaris is in daily use on macOS. Planned additions include an iPhone version with iCloud sync, a digital bookshelf with spines generated from cover colours and page counts, and daily reading progress taken from the Kindle app.
+
+`SPEC.md` contains the original design specification.

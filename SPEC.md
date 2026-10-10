@@ -1,140 +1,145 @@
-# Amaris — Spec
+# Amaris: Design Specification
 
-A macOS reading tracker app + desktop widgets for tracking what I read and keeping a library of my favourite quotes. Named after Amaris from *Alchemised*.
+This document describes the requirements, data sources and data model behind Amaris, a macOS reading tracker with desktop widgets. It was written before development began and has since been updated to match the built app. For an overview of the finished project, see `README.md`.
 
-_Last updated: 2026-10-09_
+## 1. Goals
 
----
+Amaris records when each book was started and finished, shows that history visually, and keeps a library of favourite quotes. Goodreads stays the place where books are logged, and Amaris follows it automatically.
 
-## Features
+| # | Feature | Priority | Where it appears | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Reading calendar: a book cover on every day the book was being read | High | App and calendar widget | Built |
+| 2 | Start and finish tracking, including marking a book as DNF | High | App; drives the calendar | Built |
+| 3 | Quote rotation, with a quick way to add quotes | High | App and quote widget | Built |
+| 4 | Daily reading progress | Low | App only | Not started |
 
-| # | Feature | Priority | On a widget? |
-|---|---|---|---|
-| 1 | **Reading calendar**: a book cover on every day I was reading that book | High |  Calendar widget |
-| 2 | **Reading progress**: how much I read per day / session | Low | App only (later) |
-| 3 | **Quote rotation**: favourite quotes cycle on a widget, plus an easy upload screen | High | Quote widget |
-| 4 | **Start / finish tracking**: when I started and finished each book, plus a DNF button | High | Feeds the calendar |
+### 1.1 Reading calendar
 
-### 1. Reading calendar
-- A book's cover appears on **every day from its start date to its finish date (inclusive)**.
-  - Example: started on the 1st, finished on the 5th → cover on the 1st, 2nd, 3rd, 4th and 5th.
-- A book I'm **currently reading** fills from its start date **through today**.
-- If I'm reading **two books at once**, **show both** covers on the overlapping days.
-- **DNF books** fill from their start date to the day I marked them DNF.
-- One month per view.
+A book's cover appears on every day from its start date to its finish date, inclusive. A book started on the 1st and finished on the 5th therefore appears on the 1st through the 5th. A book still being read fills every day from its start up to today. When two books are read at the same time, both covers are shown on the overlapping days. A book marked as DNF fills the days from its start to the day it was abandoned.
 
-### 2. Reading progress (low priority, not built yet)
-- Nice-to-have data: progress per day or session. Not shown on any widget.
-- Only possible source: the Mac Kindle app's local data (see *Data sources*). Unverified, so it comes later.
+The app shows a full year. The calendar widget shows the current month.
 
-### 3. Quote rotation
-- The widget shows one quote at a time (text, book title, author) and rotates on a schedule (e.g. hourly).
-- A **"next quote" button** on the widget (interactive widgets, macOS 14+).
-- **Favourite** flag: the widget can cycle all quotes or only favourites.
-- **Upload screen**, which needs to be quick:
-  - Pick the book (defaults to the most recently finished or current book).
-  - Paste one or **several quotes at once**. A blank line separates quotes (same convention as my reviews).
-  - Save. Edit, delete and merge (for a quote that got split in two) are available afterwards.
-- I usually pull ~5 quotes per book but only 1–3 make it into my Goodreads review, so **the app stores all of them**.
-- **Not** importing all Kindle highlights: many of mine are for lore and aren't favourites.
+### 1.2 Start and finish tracking
 
-### 4. Start / finish tracking
-- **Going forward:** start and finish dates come from **Goodreads**, which I update every time I start or finish a book.
-- **DNF:** a DNF button in the app. Goodreads' `did-not-finish` shelf is also imported.
-- **Past books:** rebuilt from the Goodreads CSV export (see *Backfill*).
-- Re-reads are unlikely. The database allows them but they aren't a focus.
+Going forward, start and finish dates come from Goodreads, which is updated whenever a book is started or finished. Books can also be marked as DNF in the app, and the Goodreads `did-not-finish` shelf is imported. Past books are reconstructed from the Goodreads CSV export (Section 3). Re-reads are rare. The data model allows them, but they are not a focus.
 
----
+### 1.3 Quote rotation
 
-## Data sources
+The quote widget shows one quote at a time, with the book's title, author and cover, and changes on a schedule (hourly). A button on the widget moves to the next quote, and the widget can be set to show favourites only.
 
-| Source | Gives us | How | Status |
-|---|---|---|---|
-| **Goodreads CSV export** | Past books: title, author, rating, pages, date read, shelf, review (→ quotes) | One-time import | Done (`data/`) |
-| **Goodreads shelf RSS** (`/review/list_rss/<user-id>?shelf=…&page=n`) | currently-reading `user_date_added` → **start date**; read `user_read_at` → **finish date**; did-not-finish → DNF; **cover image** | On launch + hourly | ✅ Built. Feed ratings are rounded to whole stars, so they never overwrite a precise one |
-| ~~Goodreads updates RSS~~ | Not needed: the currently-reading shelf feed already gives start dates | — | ❌ Dropped |
-| **Manual entry (app)** | Quotes, DNF, corrections to any date | Upload screen / buttons | To build |
-| **Mac Kindle app (local DB)** | Progress position, "read" state, highlights | Read-only access to its SQLite files | Optional, only for feature 2 |
+Adding quotes needs to be quick. The user picks a book (defaulting to the current or most recently finished one) and pastes one or more quotes, separated by blank lines, matching the format already used in Goodreads reviews. Quotes can be edited, deleted or merged afterwards. A merge joins a passage that was split in two by mistake.
 
-The Goodreads RSS feeds only work if my **profile and shelves are public**.
+Typically about five quotes are kept per book, but only one to three make it into the Goodreads review, so the app stores all of them. Kindle highlights are deliberately not imported in bulk, because many of them are reference notes rather than favourite passages.
 
-### Goodreads export: what I found
-- Quotes are at the **start** of a review, wrapped in `<i>…</i>` or `<i><b>…</b></i>`. The closing-tag order varies (`</b></i>` or `</i></b>`).
-- Goodreads converts line breaks to `<br/>`, so several quotes are separated by `<br/><br/>`.
-- Some reviews have **several separate `<i>` blocks**, one quote each.
-- Quotation marks are inconsistent (curly “ ”, straight " or none). Text is kept as written.
-- Reviews without quotes have no italics at all. I checked: none contain quotes in any other format.
-- **Known limitation:** a single quote spanning two paragraphs gets split into two quotes. Fix with "merge" in the app.
+### 1.4 Reading progress (deferred)
 
-### Mac Kindle app: what I found (for later)
-Data lives in `~/Library/Containers/com.amazon.Lassen/Data/Library/`. **Read-only, and always on a copy.**
-- `Protected/BookData.sqlite` → `ZBOOK`: library (144 books), `ZRAWCURRENTPOSITION` / `ZRAWMAXPOSITION` (→ % progress), last access time.
-- `Application Support/Whispersync/WSyncDefault.sqlite` → `BookReadStates`: `READ` / `UNREAD` per book. `origin: MANUAL` = my "have read" click. **No timestamp.**
-- `AnnotationStorage` → `ZANNOTATION`: 1,412 highlights, plus `lpr` (last page read) entries.
-- **No reading history or sessions** are stored, only the current state. History would have to be built by polling and diffing.
-- **Open question:** does a position from my Kindle reach the Mac app without opening the book on the Mac? The first test (Project Hail Mary, 2026-10-09) showed no change. Not yet confirmed either way.
-- Undocumented, and Amazon may change it. macOS may ask for permission or Full Disk Access.
+Progress per day or session would be useful but is not shown on any widget. The only possible source is the local data of the Kindle app for Mac (Section 2.3), which has not been verified, so this feature is deferred.
 
----
+## 2. Data sources
 
-## Backfill rules (past books from the CSV)
+| Source | Provides | How it is used |
+| --- | --- | --- |
+| Goodreads CSV export | Title, author, rating, page count, date read, shelf and review for past books | Imported once (can be re-run safely) |
+| Goodreads shelf page, saved as HTML | Real start dates for past books | Imported once (can be re-run safely) |
+| Goodreads RSS feed (`/review/list_rss/<user-id>?shelf=#ALL#`) | Current shelf, date added, date read and cover image for every book | Read at launch, hourly and on wake |
+| Manual entry in the app | Quotes, DNF, corrections to any date, cover overrides | As needed |
+| Kindle app for Mac (local database) | Reading position and highlights | Not used; considered for feature 4 |
 
-1. Import only shelves **`read`**, **`currently-reading`** and **`did-not-finish`**. `to-read` is already removed.
-2. **Skip `read` books with no "Date Read"** (131 old reads, not needed). That leaves **71 dated books** (Dec 2023 – Oct 2026).
-3. Sort by **Date Read**, not by CSV order (the CSV is ordered by date added).
-4. **Estimated start date** = the finish date of the previous book in that order, **capped at 30 days before its own finish date**.
-   - Several books finished on the same day → each gets the same previous finish as its start.
-5. **Currently reading** (*The Invisible Life of Addie LaRue*): start = the last finished book's date (same 30-day cap), or the real date from the Goodreads updates feed if it's available.
-6. **DNF books** (10) have no dates in the export → library only, not on the calendar.
-7. Quotes: 32 quotes from 23 books, all from dated books → `data/quotes_seed.json`.
-8. Every estimated date can be **edited in the app**.
+The RSS feeds require a public Goodreads profile and public shelves.
 
----
+### 2.1 Goodreads RSS feed
 
-## Database
+On the currently-reading shelf, `user_date_added` is the date the book was shelved there, which is used as the start date. For read books, `user_read_at` is the finish date, stored as midnight UTC. `book_large_image_url` carries a size suffix such as `._SY475_`, and removing it gives the original image.
 
-| Table | Columns | Notes |
-|---|---|---|
-| **books** | `id`, `goodreads_id`, `kindle_book_id` (nullable), `isbn13`, `title`, `author`, `cover_url` / `cover_path`, `page_count`, `rating` (decimal: Goodreads allows quarter stars, e.g. 3.25, 3.5, 3.75; 0 = unrated), `status` (`reading` / `read` / `dnf`), `spine_color` _(later)_ | One row per book |
-| **readings** (`Reading` model) | `id`, `book_id`, `started_at`, `finished_at` (null while reading), `outcome` (`read` / `dnf`), `start_is_estimated`, `dates_edited_manually`, `source` (`goodreads_csv` / `goodreads_rss` / `manual`) | **Drives the calendar.** Several per book allowed (re-reads) |
-| **quotes** | `id`, `book_id`, `text`, `source` (`goodreads` / `manual`), `is_favourite`, `created_at`, `last_shown_at` | `last_shown_at` keeps rotation fair |
-| **progress_log** _(later)_ | `book_id`, `observed_at`, `position`, `max_position` | Feature 2 only. Append-only, rows written on change |
+Ratings in the feed are rounded to whole stars. They are only used to fill in a missing rating and never overwrite a more precise one entered in the app.
 
-**Calendar query:** for each day of the month, return every `reading` where `started_at ≤ day ≤ (finished_at ?? today)`.
+The feeds for individual shelves were found to lag behind Goodreads by several hours. The combined `#ALL#` feed is current, so sync uses it. In that feed, `user_shelves` names the currently-reading, did-not-finish and to-read shelves (alongside any custom shelves) but is left blank for read books. Any book that is not on one of those three shelves is therefore treated as read.
 
-**Dedup on sync:** match Goodreads RSS items to `books` by `goodreads_id`. Never overwrite a date I've edited manually.
+### 2.2 Goodreads CSV export
 
----
+Quotes appear at the start of a review, wrapped in `<i>…</i>` or `<i><b>…</b></i>`, with the closing tags in either order. Goodreads converts line breaks to `<br/>`, so separate quotes are divided by `<br/><br/>`, and some reviews contain several separate italic blocks. Quotation marks are inconsistent (curly, straight or absent), and the text is kept as written. Reviews without quotes contain no italics.
 
-## Covers & spines
-- **Front covers**, by priority: **Goodreads RSS cover** (the edition I shelved; size suffix like `._SY475_` removed for the original) → Open Library (ISBN, then title/author search; can return translated editions) → manual override in the app (never replaced).
-- Kindle app cover cache isn't usable (only ~38 files, names can't be matched to books).
-- Covers are **downloaded once and stored locally** in the shared container. Widgets can't fetch images while rendering.
-- **Spines** (for the future digital bookshelf): no API provides spine images, so they're **generated**. Colour = the cover's dominant colours, width ∝ page count, vertical title/author text. Optional manual spine photo per book.
+One limitation remains: a single quote that spans two paragraphs is imported as two quotes. The merge action in the app fixes this.
 
-## Build order
-1. Database (SwiftData models in the shared App Group container)
-2. Import: Goodreads CSV + quotes seed + covers
-3. App: library (edit dates, DNF), quotes (browse, favourite, upload), **full-year calendar**
-4. Goodreads RSS sync
-5. Widgets: current-month calendar, quote (with cover), currently reading
-6. Extras: digital bookshelf, daily progress from Kindle
+The export does not include start dates, which is why the saved shelf page is also imported.
 
-## Tech stack (planned)
-- **Swift + SwiftUI** macOS app (it hosts the widgets).
-- **WidgetKit** widgets: calendar (large) and quote (small/medium). Interactive buttons via App Intents (macOS 14+).
-- **SwiftData or SQLite** for storage, in an **App Group** container so the app and widgets share it.
-- **Background sync:** poll the Goodreads RSS feeds every ~hour while the app runs, then refresh the widgets.
-- **Covers:** Goodreads RSS cover URLs, with Open Library as a fallback, cached locally.
+### 2.3 Kindle app for Mac (not used)
 
----
+The Kindle app stores its data under `~/Library/Containers/com.amazon.Lassen/Data/Library/`:
 
-## Open items
-- [x] Goodreads feeds verified and synced (shelves are public).
-- [ ] (Later, feature 2) Re-run the Kindle sync test.
-- [ ] Decide widget sizes and the calendar look, e.g. how two covers share one day.
+- `Protected/BookData.sqlite`: the library, with current and maximum reading positions (enough to work out percentage progress) and the last access time.
+- `Application Support/Whispersync/WSyncDefault.sqlite`: a read or unread state per book, without a timestamp.
+- `AnnotationStorage`: highlights and last-page-read entries.
 
-## Files
-- `data/goodreads_export_raw.csv`: untouched copy of the Goodreads export (2026-10-04)
-- `data/goodreads_clean.csv`: kept columns only (+ ISBN13 for cover lookups, `="…"` wrapper stripped), `to-read` removed (213 rows)
-- `data/quotes_seed.json`: 32 extracted quotes
+None of these store a history of reading sessions, only the current state, so a history would have to be built by checking repeatedly and recording changes. It is also unclear whether a position reached on a Kindle device reaches the Mac app without opening the book there. The format is undocumented and may change. For these reasons the Kindle data is not used.
+
+## 3. Reconstructing past reading history
+
+1. Only the `read`, `currently-reading` and `did-not-finish` shelves are imported.
+2. Read books without a date read are skipped. Older reads without dates are not needed for the calendar.
+3. Books are ordered by date read, not by their order in the CSV (which follows the date added).
+4. The estimated start date is the finish date of the previous book, limited to 30 days before the book's own finish date. Books finished on the same day share the same estimated start.
+5. A book currently being read takes its start date from the Goodreads feed.
+6. DNF books have no dates in the export, so they appear in the library but not on the calendar until dates are added.
+7. Quotes are extracted from reviews of dated books.
+8. Every estimated date is flagged as an estimate. A real start date from the saved shelf page, or an edit in the app, replaces it. Re-running the CSV import never overwrites a date that is no longer an estimate.
+
+## 4. Data model
+
+The data model uses SwiftData and is stored in an App Group container shared by the app and the widget extension. It is kept compatible with iCloud sync: there are no unique constraints, and every property has a default value or is optional.
+
+| Model | Fields | Notes |
+| --- | --- | --- |
+| `Book` | Goodreads ID, Kindle book ID, ISBN-13, title, author, page count, rating (supports quarter stars), cover file name, cover source, status (`reading`, `read`, `dnf`), last known Goodreads shelf | One per book |
+| `Reading` | Book, start date, finish date (empty while reading), outcome (`read` or `dnf`), start-is-estimated flag, dates-edited-by-hand flag, source (`goodreadsCSV`, `goodreadsRSS`, `manual`) | Drives the calendar. A book can have several (re-reads) |
+| `Quote` | Book, text, favourite flag, source, created date, last shown date | |
+
+Deleting a book also deletes its readings and quotes.
+
+**Calendar query:** for each day, every reading whose start date falls on or before that day, and whose finish date (or today, if unfinished) falls on or after it.
+
+### 4.1 Sync rules
+
+Feed items are matched to books by Goodreads ID. Sync follows two rules so that it never undoes changes made in the app:
+
+- A reading whose dates were edited by hand is never changed by sync.
+- A book's status changes, and a reading is started or ended, only when the book moves to a different Goodreads shelf than the one last seen. Marking a book as DNF in the app is therefore not reversed by the next sync.
+
+## 5. Covers
+
+Front covers are chosen in this order:
+
+1. The Goodreads feed cover, which matches the edition on the shelf.
+2. Open Library, searched by ISBN and then by title and author. This can return translated editions, so it is only a fallback.
+3. A cover chosen by hand in the app, which sync never replaces.
+
+Covers are downloaded once, resized to 900 pixels, and stored in the shared container, because widgets cannot fetch images while they are drawn.
+
+Spines for the planned digital bookshelf would have to be generated, since no service provides spine images. The planned approach is to take colours from the cover, set the width from the page count, and set the title and author vertically.
+
+## 6. Architecture
+
+- **App:** Swift and SwiftUI on macOS. Library, quotes, calendar and settings views. Opens at login without a window and runs from the menu bar.
+- **Widgets:** WidgetKit widgets for the calendar (large), quotes (medium), the current book (small) and the year's total (small). Each widget can be set to one of two themes, and the next-quote button uses App Intents.
+- **Sync:** at launch, hourly, and when the Mac wakes. The widgets are refreshed after every saved change.
+- **Shared code:** models, storage, calendar logic, theming and widget data are compiled into both the app and the widget extension.
+
+## 7. Build order
+
+1. Data model in the shared App Group container. (Done)
+2. Goodreads CSV import, quote extraction and covers. (Done)
+3. App: library, quotes and full-year calendar. (Done)
+4. Goodreads RSS sync. (Done)
+5. Widgets: calendar, quote, current book and year, in two themes. (Done)
+6. Background running: login item and menu bar. (Done)
+7. Later: digital bookshelf, iPhone version with iCloud sync, and daily progress.
+
+## 8. Local data files
+
+The `data/` folder holds personal Goodreads data and is excluded from version control.
+
+- `goodreads_export_raw.csv`: an unmodified copy of the Goodreads export.
+- `goodreads_clean.csv`: the export reduced to the columns in use, with ISBN-13 cleaned and to-read books removed.
+- `quotes_seed.json`: quotes extracted from reviews.
+- `goodreads_shelf.html`: the saved shelf page used for start dates.
+- `backups/`: copies of the database taken before major changes.
