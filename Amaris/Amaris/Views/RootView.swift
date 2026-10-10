@@ -32,6 +32,7 @@ enum SidebarItem: Hashable, CaseIterable {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.modelContext) private var context
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var selection: SidebarItem? = .library
 
     var body: some View {
@@ -56,14 +57,9 @@ struct RootView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 520)
-        // Sync on launch and hourly while the window is open; restarts when
-        // the Goodreads account changes.
-        .task(id: model.goodreads.userID) {
-            await model.syncPeriodically(in: context)
-        }
-        // Any saved change (sync, import, quotes, edits) refreshes the widgets.
-        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
-            WidgetData.reloadWidgets()
+        // Opened at login: stay in the background (menu bar only).
+        .onAppear {
+            if model.consumeQuietLaunch() { dismissWindow() }
         }
         .sheet(isPresented: $model.isAddingQuotes) {
             AddQuotesSheet(initialBook: model.addQuotesBook)

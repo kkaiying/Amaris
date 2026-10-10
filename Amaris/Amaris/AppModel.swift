@@ -41,11 +41,37 @@ final class AppModel {
         }
     }
 
-    /// Syncs now and then hourly, for as long as the calling task lives.
-    func syncPeriodically(in context: ModelContext) async {
-        while !Task.isCancelled {
-            await syncNow(in: context)
-            try? await Task.sleep(for: GoodreadsSync.syncInterval)
+    /// True when macOS opened Amaris at login; the first window closes straight away.
+    var launchedAtLogin = false
+
+    /// Called by the main window when it first appears.
+    func consumeQuietLaunch() -> Bool {
+        defer { launchedAtLogin = false }
+        return launchedAtLogin
+    }
+
+    private var backgroundSync: Task<Void, Never>?
+    private var widgetRefresh: Task<Void, Never>?
+
+    /// Syncs now and then hourly, whether or not a window is open. Calling it
+    /// again (new Goodreads account, Mac woke up) restarts the cycle.
+    func startBackgroundSync() {
+        backgroundSync?.cancel()
+        let context = AmarisStore.shared.mainContext
+        backgroundSync = Task {
+            while !Task.isCancelled {
+                await syncNow(in: context)
+                try? await Task.sleep(for: GoodreadsSync.syncInterval)
+            }
+        }
+
+        // Any saved change (sync, import, quotes, edits) refreshes the widgets.
+        if widgetRefresh == nil {
+            widgetRefresh = Task {
+                for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
+                    WidgetData.reloadWidgets()
+                }
+            }
         }
     }
 

@@ -10,14 +10,15 @@ import SwiftData
 
 @main
 struct AmarisApp: App {
-    @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
+    private var model: AppModel { appDelegate.model }
 
     init() {
         AmarisFonts.register()
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             RootView()
                 .environment(model)
         }
@@ -37,5 +38,33 @@ struct AmarisApp: App {
             SettingsView()
                 .environment(model)
         }
+
+        // Stays while Amaris runs in the background with no windows open.
+        MenuBarExtra("Amaris", systemImage: "books.vertical") {
+            MenuBarContent()
+                .environment(model)
+        }
+    }
+}
+
+private struct MenuBarContent: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Text(model.statusText ?? "Not synced yet")
+        Button("Sync Now") {
+            Task { await model.syncNow(in: AmarisStore.shared.mainContext) }
+        }
+        .disabled(model.isBusy || model.goodreads.userID == nil)
+        Divider()
+        Button("Open Amaris") {
+            openWindow(id: "main")
+            NSApp.activate()
+        }
+        SettingsLink { Text("Settings…") }
+        Divider()
+        Button("Quit Amaris") { NSApp.terminate(nil) }
+            .keyboardShortcut("q")
     }
 }

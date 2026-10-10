@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  Amaris
 //
-//  Settings window (⌘,): Goodreads account and CSV import.
+//  Settings window (⌘,): opening at login, Goodreads account, fan art and imports.
 //
 
 import SwiftUI
@@ -15,6 +15,8 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            OpenAtLoginSection()
+
             Section {
                 if let userID = model.goodreads.userID {
                     LabeledContent("Connected account", value: "User \(userID)")
@@ -27,6 +29,7 @@ struct SettingsView: View {
                     Button("Connect") {
                         if let id = GoodreadsFeed.userID(from: profileText) {
                             model.goodreads.userID = id
+                            model.startBackgroundSync()
                             error = nil
                         } else {
                             error = "That doesn't look like a Goodreads profile link."
@@ -39,7 +42,7 @@ struct SettingsView: View {
             } header: {
                 Text("Goodreads")
             } footer: {
-                Text("Your shelves must be public. Amaris reads your currently-reading, read and did-not-finish shelves on launch and every hour.")
+                Text("Your shelves must be public. Amaris reads your shelves on launch, every hour, and when your Mac wakes up.")
                     .foregroundStyle(.secondary)
             }
 
@@ -67,6 +70,40 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Keeps Amaris running in the background (menu bar only) so Goodreads keeps syncing.
+private struct OpenAtLoginSection: View {
+    @State private var isEnabled = LoginItem.isEnabled
+    @State private var needsApproval = LoginItem.needsApproval
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            Toggle("Open at login", isOn: Binding(get: { isEnabled }, set: { set($0) }))
+            if needsApproval {
+                Text("Turn Amaris on in System Settings → General → Login Items.")
+                    .foregroundStyle(.secondary)
+            }
+            if let error {
+                Text(error).foregroundStyle(.red)
+            }
+        } footer: {
+            Text("Amaris opens quietly in the menu bar when you log in, so your shelves keep syncing. Widgets work either way; they just won't see Goodreads changes while Amaris is quit.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func set(_ enabled: Bool) {
+        do {
+            try LoginItem.setEnabled(enabled)
+            error = nil
+        } catch {
+            self.error = "Couldn't change this: \(error.localizedDescription)"
+        }
+        isEnabled = LoginItem.isEnabled
+        needsApproval = LoginItem.needsApproval
     }
 }
 
