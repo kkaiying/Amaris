@@ -11,8 +11,10 @@
 //  - `user_read_at` on read = the "date read" → finish date (midnight UTC).
 //  - `user_rating` is rounded to whole stars, so it must not overwrite a precise rating.
 //  - `book_large_image_url` has a size suffix (._SY475_); removing it gives the original.
-//  - Single-shelf feeds can lag behind Goodreads by hours, but the #ALL# feed is
-//    current, so sync reads that. Its `user_shelves` lists currently-reading,
+//  - Goodreads caches each feed by shelf name for hours, so a shelf (even #ALL#)
+//    can show changes late. A shelf name that doesn't exist falls back to every
+//    book, uncached, so sync asks for a new made-up name each time.
+//  - In the all-books feed, `user_shelves` lists currently-reading,
 //    did-not-finish, to-read and custom shelves, but leaves "read" blank.
 //  - Goodreads has no "paused" status; a custom on-hold shelf stands in for it.
 //
@@ -74,8 +76,15 @@ nonisolated enum GoodreadsFeed {
 
     /// Fetches every book on every shelf, grouped by exclusive shelf (to-read left out).
     static func fetchAllShelves(userID: String, session: URLSession) async throws -> [Shelf: [FeedItem]] {
-        let items = try await fetchShelf("#ALL#", userID: userID, session: session)
+        var items = try await fetchShelf(uncachedAllShelves(), userID: userID, session: session)
+        // In case Goodreads stops treating an unknown shelf as "all books".
+        if items.isEmpty { items = try await fetchShelf("#ALL#", userID: userID, session: session) }
         return Dictionary(grouping: items.filter { $0.shelf != nil }) { $0.shelf! }
+    }
+
+    /// A shelf name never asked for before, so Goodreads lists every book fresh.
+    static func uncachedAllShelves(now: Date = .now) -> String {
+        "amaris-sync-\(Int(now.timeIntervalSince1970))"
     }
 
     /// Fetches every page of a shelf.
