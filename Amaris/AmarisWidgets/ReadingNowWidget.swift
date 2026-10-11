@@ -46,7 +46,7 @@ struct ReadingNowWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "AmarisReadingNow", intent: ThemeIntent.self, provider: ReadingNowProvider()) { entry in
             ReadingNowView(entry: entry)
-                .containerBackground(for: .widget) { ThemeBackground(theme: entry.theme) }
+                .containerBackground(for: .widget) { ThemeBackground(theme: entry.theme, deep: true) }
         }
         .configurationDisplayName("Currently Reading")
         .description("The book you're reading and how long you've been at it.")
