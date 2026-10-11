@@ -15,13 +15,13 @@ Amaris records when each book was started and finished, shows that history visua
 
 ### 1.1 Reading calendar
 
-A book's cover appears on every day from its start date to its finish date, inclusive. A book started on the 1st and finished on the 5th therefore appears on the 1st through the 5th. A book still being read fills every day from its start up to today. When two books are read at the same time, both covers are shown on the overlapping days. A book marked as DNF fills the days from its start to the day it was abandoned.
+A book's cover appears on every day from its start date to its finish date, inclusive. A book started on the 1st and finished on the 5th therefore appears on the 1st through the 5th. A book still being read fills every day from its start up to today. When two books are read at the same time, both covers are shown on the overlapping days. A book marked as DNF fills the days from its start to the day it was abandoned. Days spent on hold are left empty.
 
 The app shows a full year. The calendar widget shows the current month.
 
 ### 1.2 Start and finish tracking
 
-Going forward, start and finish dates come from Goodreads, which is updated whenever a book is started or finished. Books can also be marked as DNF in the app, and the Goodreads `did-not-finish` shelf is imported. Past books are reconstructed from the Goodreads CSV export (Section 3). Re-reads are rare. The data model allows them, but they are not a focus.
+Going forward, start and finish dates come from Goodreads, which is updated whenever a book is started or finished. Books can also be marked as DNF in the app, and the Goodreads `did-not-finish` shelf is imported. Goodreads has no paused status, so a book on a custom `on-hold` shelf is put on hold, and removing it from that shelf resumes it. A book can also be put on hold or resumed in the app, and the dates of each hold can be edited. Past books are reconstructed from the Goodreads CSV export (Section 3). Re-reads are rare. The data model allows them, but they are not a focus.
 
 ### 1.3 Quote rotation
 
@@ -53,7 +53,7 @@ On the currently-reading shelf, `user_date_added` is the date the book was shelv
 
 Ratings in the feed are rounded to whole stars. They are only used to fill in a missing rating and never overwrite a more precise one entered in the app.
 
-The feeds for individual shelves were found to lag behind Goodreads by several hours. The combined `#ALL#` feed is current, so sync uses it. In that feed, `user_shelves` names the currently-reading, did-not-finish and to-read shelves (alongside any custom shelves) but is left blank for read books. Any book that is not on one of those three shelves is therefore treated as read.
+The feeds for individual shelves were found to lag behind Goodreads by several hours. The combined `#ALL#` feed is current, so sync uses it. In that feed, `user_shelves` names the currently-reading, did-not-finish and to-read shelves (alongside any custom shelves) but is left blank for read books. Any book that is not on one of those three shelves, or on the `on-hold` shelf, is therefore treated as read. A book on `on-hold` counts as currently reading even if that shelf is made exclusive. The feed does not record when a book was added to a custom shelf, so a hold starts on the day sync first sees it.
 
 ### 2.2 Goodreads CSV export
 
@@ -90,13 +90,13 @@ The data model uses SwiftData and is stored in an App Group container shared by 
 
 | Model | Fields | Notes |
 | --- | --- | --- |
-| `Book` | Goodreads ID, Kindle book ID, ISBN-13, title, author, page count, rating (supports quarter stars), cover file name, cover source, status (`reading`, `read`, `dnf`), last known Goodreads shelf | One per book |
-| `Reading` | Book, start date, finish date (empty while reading), outcome (`read` or `dnf`), start-is-estimated flag, dates-edited-by-hand flag, source (`goodreadsCSV`, `goodreadsRSS`, `manual`) | Drives the calendar. A book can have several (re-reads) |
+| `Book` | Goodreads ID, Kindle book ID, ISBN-13, title, author, page count, rating (supports quarter stars), cover file name, cover source, status (`reading`, `read`, `dnf`), last known Goodreads shelf, whether it was last seen on the on-hold shelf | One per book |
+| `Reading` | Book, start date, finish date (empty while reading), outcome (`read` or `dnf`), holds (each a start date and an optional resume date), start-is-estimated flag, dates-edited-by-hand flag, source (`goodreadsCSV`, `goodreadsRSS`, `manual`) | Drives the calendar. A book can have several (re-reads) |
 | `Quote` | Book, text, favourite flag, source, created date, last shown date | |
 
 Deleting a book also deletes its readings and quotes.
 
-**Calendar query:** for each day, every reading whose start date falls on or before that day, and whose finish date (or today, if unfinished) falls on or after it.
+**Calendar query:** for each day, every reading whose start date falls on or before that day, and whose finish date (or today, if unfinished) falls on or after it, excluding readings on hold that day.
 
 ### 4.1 Sync rules
 
@@ -104,6 +104,7 @@ Feed items are matched to books by Goodreads ID. Sync follows two rules so that 
 
 - A reading whose dates were edited by hand is never changed by sync.
 - A book's status changes, and a reading is started or ended, only when the book moves to a different Goodreads shelf than the one last seen. Marking a book as DNF in the app is therefore not reversed by the next sync.
+- A reading is put on hold or resumed only when the book is added to or removed from the `on-hold` shelf, so a hold changed in the app is kept. Finishing or abandoning a book ends any open hold.
 
 ## 5. Covers
 

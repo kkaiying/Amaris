@@ -10,11 +10,11 @@ The project began as a personal tool. Goodreads works well for logging books but
 
 The **Library** lists every book that has been read, is in progress, or was not finished (DNF), grouped by year. Each book has its cover, a rating that supports quarter stars, and start and finish dates that can be edited.
 
-The **Calendar** shows a full year. A book's cover fills every day from its start date to its finish date, or up to today if it is still being read. When two books overlap, both covers appear on the shared days.
+The **Calendar** shows a full year. A book's cover fills every day from its start date to its finish date, or up to today if it is still being read. When two books overlap, both covers appear on the shared days. A book can be put on hold, and the days it spends on hold are left empty.
 
 The **Quotes** section holds saved passages from books. Several quotes can be pasted at once and are separated automatically at blank lines. Quotes can be marked as favourites, edited, merged (for a passage that was split by mistake) or deleted.
 
-Amaris stays in step with **Goodreads** without any extra effort. Books continue to be logged on Goodreads as usual, and Amaris syncs every hour and whenever the Mac wakes, starting, finishing or marking books as DNF to match. The app opens at login without a window and runs from the menu bar, so syncing continues while it is out of the way.
+Amaris stays in step with **Goodreads** without any extra effort. Books continue to be logged on Goodreads as usual, and Amaris syncs every hour and whenever the Mac wakes, starting, finishing or marking books as DNF to match. Goodreads has no paused status, so a book added to a custom `on-hold` shelf is treated as on hold. The app opens at login without a window and runs from the menu bar, so syncing continues while it is out of the way.
 
 ### The widgets
 
@@ -39,7 +39,7 @@ The project has two parts: the macOS app and a widget extension. Both read the s
 
 The data model has three types. A `Book` holds the details of a title, a `Reading` records a single attempt at it (start and finish dates, whether it was finished or abandoned, and whether the dates were estimated or edited by hand), and a `Quote` belongs to a book. The model is kept compatible with iCloud sync, which would allow an iPhone version later.
 
-There are 41 unit tests covering parsing, history reconstruction, sync behaviour, calendar calculations, quote rotation, and regressions for bugs found during development.
+There are 46 unit tests covering parsing, history reconstruction, sync behaviour, calendar calculations, quote rotation, and regressions for bugs found during development.
 
 ## Design notes
 
@@ -59,7 +59,7 @@ Reviews on this account begin with favourite quotes in italics. A parser extract
 
 ### Keeping manual edits safe during sync
 
-Hourly sync could easily overwrite changes made in the app. Two rules prevent this. Any date edited by hand is flagged and never changed by sync again. A book's status changes only when it moves to a different Goodreads shelf, so marking a book as DNF in the app is not reversed by the next sync.
+Hourly sync could easily overwrite changes made in the app. Two rules prevent this. Any date edited by hand is flagged and never changed by sync again. A book's status changes only when it moves to a different Goodreads shelf, so marking a book as DNF in the app is not reversed by the next sync. The on-hold shelf follows the same rule: a book is paused or resumed only when it is added to or removed from that shelf.
 
 ### Covers
 

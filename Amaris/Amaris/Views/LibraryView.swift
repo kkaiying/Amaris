@@ -149,8 +149,8 @@ private struct BookCell: View {
             CoverImage(book: book)
                 .shadow(color: .black.opacity(0.2), radius: 3, y: 2)
                 .overlay(alignment: .topTrailing) {
-                    if book.status == .dnf {
-                        Text("DNF")
+                    if book.status == .dnf || book.isPaused {
+                        Text(book.status == .dnf ? "DNF" : "On hold")
                             .font(.caption2.bold())
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(.ultraThinMaterial, in: Capsule())

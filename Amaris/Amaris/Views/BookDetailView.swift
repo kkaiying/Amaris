@@ -2,7 +2,7 @@
 //  BookDetailView.swift
 //  Amaris
 //
-//  One book: cover (with "Choose Cover…"), rating, reading dates, DNF, quotes.
+//  One book: cover (with "Choose Cover…"), rating, reading dates, on hold, DNF, quotes.
 //
 
 import SwiftUI
@@ -41,7 +41,7 @@ struct BookDetailView: View {
                     if let pages = book.pageCount {
                         LabeledContent("Pages", value: "\(pages)")
                     }
-                    LabeledContent("Status") { StatusLabel(status: book.status) }
+                    LabeledContent("Status") { StatusLabel(status: book.status, isPaused: book.isPaused) }
                     ratingRow
                 }
 
@@ -51,6 +51,14 @@ struct BookDetailView: View {
                     }
                     ForEach(readings) { reading in
                         ReadingDatesRow(reading: reading)
+                    }
+                    if let open = book.openReading {
+                        if open.isPaused {
+                            Button("Resume Reading") { open.resume(on: .now) }
+                        } else {
+                            Button("Put On Hold") { open.pause(on: .now) }
+                                .help("Leaves the calendar empty until you resume. Adding the book to an on-hold shelf on Goodreads does the same.")
+                        }
                     }
                     if book.status != .dnf {
                         Button("Mark as DNF", role: .destructive, action: markDNF)
@@ -156,6 +164,7 @@ struct BookDetailView: View {
     /// Ends the current reading today (or keeps its dates) and marks the book DNF.
     private func markDNF() {
         if let open = book.openReading {
+            open.resume(on: .now)
             open.finishedAt = Calendar.current.startOfDay(for: .now)
             open.outcome = .dnf
             open.datesEditedManually = true
@@ -166,9 +175,11 @@ struct BookDetailView: View {
 
 private struct StatusLabel: View {
     let status: BookStatus
+    let isPaused: Bool
 
     var body: some View {
         switch status {
+        case .reading where isPaused: Label("On hold", systemImage: "pause.circle")
         case .reading: Label("Reading", systemImage: "book")
         case .read: Label("Read", systemImage: "checkmark.circle")
         case .dnf: Label("Did not finish", systemImage: "xmark.circle")
@@ -195,6 +206,10 @@ private struct ReadingDatesRow: View {
                             .help("Guessed from the previous book's finish date. Edit to correct it.")
                     }
                 }
+            }
+
+            ForEach(reading.pauses.indices, id: \.self) { index in
+                PauseRow(reading: reading, index: index)
             }
 
             Toggle("Finished", isOn: finishedBinding)
@@ -227,6 +242,7 @@ private struct ReadingDatesRow: View {
         Binding(
             get: { reading.finishedAt != nil },
             set: { isFinished in
+                if isFinished { reading.resume(on: .now) }
                 reading.finishedAt = isFinished ? max(calendar.startOfDay(for: .now), reading.startedAt ?? .distantPast) : nil
                 reading.outcome = isFinished ? (reading.outcome ?? .read) : nil
                 reading.datesEditedManually = true
@@ -253,6 +269,47 @@ private struct ReadingDatesRow: View {
                 reading.datesEditedManually = true
                 reading.book?.status = $0
             }
+        )
+    }
+}
+
+/// One stretch on hold: editable dates, and a button to remove it (which puts
+/// those days back on the calendar).
+private struct PauseRow: View {
+    @Bindable var reading: Reading
+    let index: Int
+
+    private var calendar: Calendar { .current }
+
+    var body: some View {
+        if reading.pauses.indices.contains(index) {
+            let pause = reading.pauses[index]
+            HStack {
+                DatePicker("On hold from", selection: startBinding,
+                           in: (reading.startedAt ?? .distantPast)...(pause.end ?? .distantFuture),
+                           displayedComponents: .date)
+                Button("Remove", systemImage: "minus.circle") { reading.pauses.remove(at: index) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Remove this hold")
+            }
+            if pause.end != nil {
+                DatePicker("Resumed on", selection: endBinding, in: pause.start..., displayedComponents: .date)
+            }
+        }
+    }
+
+    private var startBinding: Binding<Date> {
+        Binding(
+            get: { reading.pauses[index].start },
+            set: { reading.pauses[index].start = calendar.startOfDay(for: $0) }
+        )
+    }
+
+    private var endBinding: Binding<Date> {
+        Binding(
+            get: { reading.pauses[index].end ?? .now },
+            set: { reading.pauses[index].end = calendar.startOfDay(for: $0) }
         )
     }
 }

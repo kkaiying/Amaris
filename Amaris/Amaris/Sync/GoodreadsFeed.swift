@@ -14,6 +14,7 @@
 //  - Single-shelf feeds can lag behind Goodreads by hours, but the #ALL# feed is
 //    current, so sync reads that. Its `user_shelves` lists currently-reading,
 //    did-not-finish, to-read and custom shelves, but leaves "read" blank.
+//  - Goodreads has no "paused" status; a custom on-hold shelf stands in for it.
 //
 
 import Foundation
@@ -29,10 +30,17 @@ nonisolated struct FeedItem: Equatable {
     var pageCount: Int?
     var shelves: [String] = []
 
-    /// The exclusive shelf this book is on, or nil for to-read.
+    /// Custom shelves that mean "started, but on hold for now".
+    static let onHoldShelves: Set<String> = ["on-hold", "paused"]
+
+    var isOnHold: Bool { shelves.contains { Self.onHoldShelves.contains($0) } }
+
+    /// The exclusive shelf this book is on, or nil for to-read. An on-hold book
+    /// counts as currently reading, even if on-hold was made an exclusive shelf.
     var shelf: Shelf? {
         if shelves.contains(Shelf.currentlyReading.rawValue) { return .currentlyReading }
         if shelves.contains(Shelf.didNotFinish.rawValue) { return .didNotFinish }
+        if isOnHold { return .currentlyReading }
         if shelves.contains("to-read") { return nil }
         return .read
     }

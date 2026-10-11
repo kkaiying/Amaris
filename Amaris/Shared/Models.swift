@@ -55,6 +55,9 @@ final class Book {
     /// The Goodreads shelf this book was on at the last sync. Sync only changes
     /// status and dates when the shelf changes, so edits made in the app stick.
     var goodreadsShelf: String?
+    /// Whether the book was on the Goodreads on-hold shelf at the last sync.
+    /// Like the shelf, only a change pauses or resumes, so app edits stick.
+    var goodreadsOnHold: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \Reading.book)
     var readings: [Reading]? = []
@@ -98,6 +101,9 @@ final class Reading {
 
     var sourceRaw: String = DataSource.manual.rawValue
 
+    /// Stretches spent on hold, which the calendar leaves empty.
+    var pauses: [ReadingPause] = []
+
     var outcome: BookStatus? {
         get { outcomeRaw.flatMap(BookStatus.init(rawValue:)) }
         set { outcomeRaw = newValue?.rawValue }
@@ -114,6 +120,13 @@ final class Reading {
         self.finishedAt = finishedAt
         self.sourceRaw = source.rawValue
     }
+}
+
+/// A stretch of a reading spent on hold: no cover from `start` up to (not
+/// including) `end`. `end` is nil while the book is still on hold.
+nonisolated struct ReadingPause: Codable, Hashable {
+    var start: Date
+    var end: Date?
 }
 
 @Model

@@ -47,17 +47,18 @@ enum WidgetData {
         return ReadingCalendar.booksByDay(readings, in: month, today: date).mapValues { $0.map(BookSnapshot.init) }
     }
 
-    /// The book started most recently that's still being read, and when.
-    static func currentBook(in context: ModelContext) -> (book: BookSnapshot, startedAt: Date)? {
+    /// The book started most recently that's still being read (not on hold),
+    /// when it was started, and how many days it has actually been read.
+    static func currentBook(in context: ModelContext, today: Date = .now) -> (book: BookSnapshot, startedAt: Date, daysRead: Int)? {
         let readings = (try? context.fetch(FetchDescriptor<Reading>())) ?? []
         let open = readings
-            .filter { $0.finishedAt == nil && $0.book?.status == .reading }
-            .compactMap { reading -> (Book, Date)? in
+            .filter { $0.finishedAt == nil && !$0.isPaused && $0.book?.status == .reading }
+            .compactMap { reading -> (Reading, Book, Date)? in
                 guard let book = reading.book, let start = reading.startedAt else { return nil }
-                return (book, start)
+                return (reading, book, start)
             }
-            .max { $0.1 < $1.1 }
-        return open.map { (BookSnapshot($0.0), $0.1) }
+            .max { $0.2 < $1.2 }
+        return open.map { (BookSnapshot($0.1), $0.2, $0.0.daysRead(through: today)) }
     }
 
     /// Books finished in the year containing `date` (not DNF), most recent first.

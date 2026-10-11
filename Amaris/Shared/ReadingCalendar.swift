@@ -6,7 +6,7 @@
 //  view and the calendar widget.
 //
 //  A book fills every day from its start date to its finish date (inclusive);
-//  a book still being read fills through today.
+//  a book still being read fills through today. Days spent on hold stay empty.
 //
 
 import Foundation
@@ -28,7 +28,9 @@ enum ReadingCalendar {
             var day = max(start, calendar.startOfDay(for: interval.start))
             let last = min(end, interval.end)
             while day <= last, day < interval.end {
-                result[day, default: []].append((start, book))
+                if !reading.isPaused(on: day) {
+                    result[day, default: []].append((start, book))
+                }
                 guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
                 day = next
             }

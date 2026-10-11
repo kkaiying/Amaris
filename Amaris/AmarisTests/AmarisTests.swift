@@ -228,6 +228,9 @@ struct GoodreadsFeedTests {
         #expect(shelf("") == .read)             // "read" is left blank
         #expect(shelf("my-loves") == .read)     // custom shelves sit alongside read
         #expect(shelf("my-loves, currently-reading") == .currentlyReading)
+        #expect(shelf("currently-reading, on-hold") == .currentlyReading)
+        #expect(shelf("on-hold") == .currentlyReading)  // even as an exclusive shelf, not "read"
+        #expect(GoodreadsFeed.item(from: ["book_id": "1", "user_shelves": "currently-reading, on-hold"])?.isOnHold == true)
     }
 
     @Test func readsUserIDFromProfileLink() {
@@ -374,6 +377,59 @@ struct ShelfChangeTests {
         #expect(reading.finishedAt == day("2026/10/05"))
     }
 
+    func onHold(_ item: FeedItem) -> FeedItem {
+        var item = item
+        item.shelves = ["currently-reading", "on-hold"]
+        return item
+    }
+
+    @Test func onHoldShelfPausesAndTakingItOffResumes() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        var summary = SyncSummary()
+        let added = day("2026/10/09")
+        _ = try FeedApplier.apply([item("1", added: added)], shelf: .currentlyReading, to: context,
+                                  today: day("2026/10/09"), summary: &summary)
+        let book = try #require(try context.fetch(FetchDescriptor<Book>()).first)
+
+        _ = try FeedApplier.apply([onHold(item("1", added: added))], shelf: .currentlyReading, to: context,
+                                  today: day("2026/10/11"), summary: &summary)
+        #expect(book.isPaused)
+        #expect(book.openReading?.pauses == [ReadingPause(start: day("2026/10/11"))])
+
+        // Still on hold at the next sync: nothing changes.
+        _ = try FeedApplier.apply([onHold(item("1", added: added))], shelf: .currentlyReading, to: context,
+                                  today: day("2026/10/12"), summary: &summary)
+        #expect(book.openReading?.pauses.count == 1)
+
+        _ = try FeedApplier.apply([item("1", added: added)], shelf: .currentlyReading, to: context,
+                                  today: day("2026/10/20"), summary: &summary)
+        #expect(!book.isPaused)
+        #expect(book.openReading?.pauses == [ReadingPause(start: day("2026/10/11"), end: day("2026/10/20"))])
+    }
+
+    @Test func resumingInAppSurvivesSyncWhileStillOnHold() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        try sync([onHold(item("1", added: day("2026/10/01")))], .currentlyReading, context)
+        let book = try #require(try context.fetch(FetchDescriptor<Book>()).first)
+        #expect(book.isPaused)
+
+        book.openReading?.resume(on: .now)
+        try sync([onHold(item("1", added: day("2026/10/01")))], .currentlyReading, context)
+        #expect(!book.isPaused)
+    }
+
+    @Test func finishingABookOnHoldEndsTheHold() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        try sync([item("1", added: day("2026/10/01"))], .currentlyReading, context)
+        let book = try #require(try context.fetch(FetchDescriptor<Book>()).first)
+        book.openReading?.pause(on: day("2026/10/03"))
+
+        try sync([item("1", readAt: "2026/10/08")], .read, context)
+        let reading = try #require(book.latestReading)
+        #expect(reading.pauses == [ReadingPause(start: day("2026/10/03"), end: day("2026/10/08"))])
+        #expect(reading.daysRead(through: day("2026/10/20")) == 3)   // 1st, 2nd, 8th
+    }
+
     @Test func movingShelfOnGoodreadsStillApplies() throws {
         let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
         try sync([item("1", added: day("2026/10/01"))], .currentlyReading, context)
@@ -424,6 +480,47 @@ struct ReadingCalendarTests {
         #expect(days[day("2026/10/09")]?.map(\.title) == ["Second"])            // through today
         #expect(days[day("2026/10/10")] == nil)
         #expect(days.count == 9)
+    }
+
+    @Test func daysOnHoldStayEmpty() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let paused = Book(title: "Paused", author: "A")
+        let other = Book(title: "Other", author: "B")
+        context.insert(paused)
+        context.insert(other)
+        let held = Reading(book: paused, startedAt: day("2026/10/01"), source: .manual)
+        held.pauses = [ReadingPause(start: day("2026/10/03"), end: day("2026/10/06")),
+                       ReadingPause(start: day("2026/10/08"))]
+        let reading = Reading(book: other, startedAt: day("2026/10/04"), source: .manual)
+        context.insert(held)
+        context.insert(reading)
+
+        let days = ReadingCalendar.booksByDay([held, reading], in: ReadingCalendar.month(containing: day("2026/10/01")),
+                                              today: day("2026/10/09"))
+        #expect(days[day("2026/10/02")]?.map(\.title) == ["Paused"])
+        #expect(days[day("2026/10/03")] == nil)                            // on hold
+        #expect(days[day("2026/10/05")]?.map(\.title) == ["Other"])
+        #expect(days[day("2026/10/06")]?.map(\.title) == ["Paused", "Other"])   // resumed
+        #expect(days[day("2026/10/09")]?.map(\.title) == ["Other"])        // on hold again
+        #expect(held.isPaused)
+        #expect(held.daysRead(through: day("2026/10/09")) == 4)            // 1st, 2nd, 6th, 7th
+    }
+
+    @Test func currentBookSkipsBooksOnHold() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        let older = Book(title: "Older", author: "A")
+        let newer = Book(title: "Newer", author: "B")
+        context.insert(older)
+        context.insert(newer)
+        context.insert(Reading(book: older, startedAt: day("2026/10/01"), source: .manual))
+        let held = Reading(book: newer, startedAt: day("2026/10/05"), source: .manual)
+        held.pause(on: day("2026/10/06"))
+        context.insert(held)
+        try context.save()
+
+        let current = try #require(WidgetData.currentBook(in: context, today: day("2026/10/09")))
+        #expect(current.book.title == "Older")
+        #expect(current.daysRead == 9)
     }
 
     @Test func clipsSpansToTheRequestedInterval() throws {

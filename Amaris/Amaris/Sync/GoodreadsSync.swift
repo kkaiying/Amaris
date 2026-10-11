@@ -6,6 +6,7 @@
 //  - currently-reading → the book is started (start = date shelved)
 //  - read              → the open reading is finished (finish = date read)
 //  - did-not-finish    → the open reading ends as DNF
+//  - on-hold (custom)  → the open reading is paused; taking it off resumes it
 //  Also uses Goodreads covers, which match the edition I shelved.
 //
 //  Never overwrites hand-edited dates, manual covers, or a precise rating.
@@ -20,6 +21,7 @@ struct SyncSummary: Equatable {
     var started = 0
     var finished = 0
     var dnf = 0
+    var paused = 0
     var coversUpdated = 0
 }
 
@@ -61,20 +63,36 @@ enum FeedApplier {
             // reading, so edits made in the app (e.g. marking DNF) aren't undone.
             let movedShelf = book.goodreadsShelf != shelf.rawValue
             book.goodreadsShelf = shelf.rawValue
+            // Same idea for on-hold: only putting it on or taking it off counts.
+            let changedHold = book.goodreadsOnHold != item.isOnHold
+            book.goodreadsOnHold = item.isOnHold
 
             switch shelf {
             case .currentlyReading:
                 let start = item.dateAdded.map(calendar.startOfDay) ?? calendar.startOfDay(for: today)
-                if let open = book.openReading {
+                var open = book.openReading
+                if let open {
                     if open.startIsEstimated, !open.datesEditedManually {
                         open.startedAt = start
                         open.startIsEstimated = false
                     }
                 } else if movedShelf {
-                    context.insert(Reading(book: book, startedAt: start, source: .goodreadsRSS))
+                    let reading = Reading(book: book, startedAt: start, source: .goodreadsRSS)
+                    context.insert(reading)
+                    open = reading
                     summary.started += 1
                 }
                 if movedShelf { book.status = .reading }
+                // The feed doesn't say when a book went on hold, so it's the day
+                // sync notices (editable in the app).
+                if changedHold, let open {
+                    if item.isOnHold {
+                        open.pause(on: today)
+                        summary.paused += 1
+                    } else {
+                        open.resume(on: today)
+                    }
+                }
 
             case .read:
                 guard let finish = item.readAt else { break }
@@ -82,6 +100,7 @@ enum FeedApplier {
                     // Also picks up a "date read" corrected on Goodreads.
                     if !latest.datesEditedManually, latest.finishedAt != finish {
                         if latest.finishedAt == nil { summary.finished += 1 }
+                        latest.resume(on: finish)
                         latest.finishedAt = finish
                         latest.outcome = .read
                     }
@@ -98,7 +117,9 @@ enum FeedApplier {
             case .didNotFinish:
                 if movedShelf {
                     if let open = book.openReading, !open.datesEditedManually {
-                        open.finishedAt = item.dateAdded.map(calendar.startOfDay) ?? calendar.startOfDay(for: today)
+                        let end = item.dateAdded.map(calendar.startOfDay) ?? calendar.startOfDay(for: today)
+                        open.resume(on: end)
+                        open.finishedAt = end
                         open.outcome = .dnf
                         summary.dnf += 1
                     }

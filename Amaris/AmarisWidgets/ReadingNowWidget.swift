@@ -13,9 +13,11 @@ struct ReadingNowEntry: TimelineEntry {
     var theme: AmarisTheme
     var book: BookSnapshot?
     var startedAt: Date?
+    /// Days actually read (on-hold days don't count); defaults to every day since the start.
+    var daysRead: Int?
 
     var dayNumber: Int? {
-        startedAt.map { WidgetSchedule.dayNumber(since: $0, today: date) }
+        daysRead ?? startedAt.map { WidgetSchedule.dayNumber(since: $0, today: date) }
     }
 }
 
@@ -37,8 +39,9 @@ struct ReadingNowProvider: AppIntentTimelineProvider {
     }
 
     private func entry(for configuration: ThemeIntent, at date: Date) -> ReadingNowEntry {
-        let current = WidgetData.currentBook(in: WidgetData.context())
-        return ReadingNowEntry(date: date, theme: configuration.theme, book: current?.book, startedAt: current?.startedAt)
+        let current = WidgetData.currentBook(in: WidgetData.context(), today: date)
+        return ReadingNowEntry(date: date, theme: configuration.theme, book: current?.book,
+                               startedAt: current?.startedAt, daysRead: current?.daysRead)
     }
 }
 
