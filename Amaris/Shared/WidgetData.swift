@@ -74,10 +74,15 @@ enum WidgetData {
             .compactMap { $0.book.map(BookSnapshot.init) }
     }
 
-    static func quotes(favouritesOnly: Bool, in context: ModelContext) -> [QuoteSnapshot] {
+    /// With "Hide low-rated books" on, quotes from books rated below this are
+    /// skipped. Unrated books still show.
+    static let lowRatingCutoff = 3.5
+
+    static func quotes(favouritesOnly: Bool, hideLowRated: Bool = false, in context: ModelContext) -> [QuoteSnapshot] {
         let quotes = (try? context.fetch(FetchDescriptor<Quote>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
         return quotes
             .filter { !favouritesOnly || $0.isFavourite }
+            .filter { !hideLowRated || ($0.book?.rating ?? lowRatingCutoff) >= lowRatingCutoff }
             .compactMap { quote in
                 quote.book.map { QuoteSnapshot(text: quote.text, book: BookSnapshot($0), isFavourite: quote.isFavourite) }
             }

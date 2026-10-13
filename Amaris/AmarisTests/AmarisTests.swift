@@ -523,6 +523,21 @@ struct ReadingCalendarTests {
         #expect(current.daysRead == 9)
     }
 
+    @Test func hidingLowRatedBooksSkipsTheirQuotes() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        for (title, rating) in [("Awful", 2.0), ("Fine", 3.5), ("Loved", 5.0), ("Unrated", nil)] as [(String, Double?)] {
+            let book = Book(title: title, author: "A")
+            book.rating = rating
+            context.insert(book)
+            context.insert(Quote(book: book, text: "From \(title)", source: .manual))
+        }
+        try context.save()
+
+        #expect(WidgetData.quotes(favouritesOnly: false, in: context).count == 4)
+        let shown = WidgetData.quotes(favouritesOnly: false, hideLowRated: true, in: context).map(\.book.title)
+        #expect(Set(shown) == ["Fine", "Loved", "Unrated"])
+    }
+
     @Test func clipsSpansToTheRequestedInterval() throws {
         let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
         let book = Book(title: "Long", author: "A")

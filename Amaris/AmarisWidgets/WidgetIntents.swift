@@ -30,6 +30,9 @@ struct QuoteIntent: WidgetConfigurationIntent {
     @Parameter(title: "Favourites only", default: false)
     var favouritesOnly: Bool
 
+    @Parameter(title: "Hide low-rated books", default: false)
+    var hideLowRated: Bool
+
     init() {}
     init(theme: AmarisTheme) { self.theme = theme }
 }

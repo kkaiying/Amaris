@@ -26,14 +26,16 @@ struct QuoteProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: QuoteIntent, in context: Context) async -> QuoteEntry {
-        let quotes = WidgetData.quotes(favouritesOnly: configuration.favouritesOnly, in: WidgetData.context())
+        let quotes = WidgetData.quotes(favouritesOnly: configuration.favouritesOnly,
+                                       hideLowRated: configuration.hideLowRated, in: WidgetData.context())
         return QuoteEntry(date: .now, theme: configuration.theme,
                           quote: QuoteRotation.quote(at: .now, from: quotes) ?? Self.sample,
                           favouritesOnly: configuration.favouritesOnly)
     }
 
     func timeline(for configuration: QuoteIntent, in context: Context) async -> Timeline<QuoteEntry> {
-        let quotes = WidgetData.quotes(favouritesOnly: configuration.favouritesOnly, in: WidgetData.context())
+        let quotes = WidgetData.quotes(favouritesOnly: configuration.favouritesOnly,
+                                       hideLowRated: configuration.hideLowRated, in: WidgetData.context())
         var entries = [QuoteEntry(date: .now, theme: configuration.theme,
                                   quote: QuoteRotation.quote(at: .now, from: quotes),
                                   favouritesOnly: configuration.favouritesOnly)]
