@@ -51,7 +51,7 @@ The RSS feeds require a public Goodreads profile and public shelves.
 
 On the currently-reading shelf, `user_date_added` is the date the book was shelved there, which is used as the start date. For read books, `user_read_at` is the finish date, stored as midnight UTC. `book_large_image_url` carries a size suffix such as `._SY475_`, and removing it gives the original image.
 
-Ratings in the feed are rounded to whole stars. They are only used to fill in a missing rating and never overwrite a more precise one entered in the app.
+Ratings in the feed are rounded to the nearest whole star (2.75 becomes 3, and 4.5 becomes 4). Reviews often state the exact rating after the quotes (for example "2.75 ⭐️"), and that figure is used when it rounds to the feed's whole stars. A rating is filled in when the book has none, and updated when the whole-star rating on Goodreads changes, unless the stored rating already rounds to the new value. A rating edited in the app is therefore kept until the book is re-rated on Goodreads.
 
 The feeds for individual shelves were found to lag behind Goodreads by several hours. The combined `#ALL#` feed is current, so sync uses it. In that feed, `user_shelves` names the currently-reading, did-not-finish and to-read shelves (alongside any custom shelves) but is left blank for read books. Any book that is not on one of those three shelves, or on the `on-hold` shelf, is therefore treated as read. A book on `on-hold` counts as currently reading even if that shelf is made exclusive. The feed does not record when a book was added to a custom shelf, so a hold starts on the day sync first sees it.
 

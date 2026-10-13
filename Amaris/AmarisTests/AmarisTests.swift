@@ -233,6 +233,20 @@ struct GoodreadsFeedTests {
         #expect(GoodreadsFeed.item(from: ["book_id": "1", "user_shelves": "currently-reading, on-hold"])?.isOnHold == true)
     }
 
+    @Test func readsRatingWrittenInReview() {
+        let review = "<i><b>“A quote with 5 stars in it”</b></i><br /><br />2.75 ⭐️ it was fine"
+        #expect(GoodreadsFeed.ratingInReview(review) == 2.75)
+        #expect(GoodreadsFeed.ratingInReview("loved it, 4.5 stars") == 4.5)
+        #expect(GoodreadsFeed.ratingInReview("3.5/5") == 3.5)
+        #expect(GoodreadsFeed.ratingInReview("read in 2 days") == nil)
+
+        var item = FeedItem(bookID: "1", title: "", author: "", rating: 3)
+        item.reviewRating = 2.75
+        #expect(item.preciseRating == 2.75)
+        item.reviewRating = 5       // doesn't match the stars given: ignored
+        #expect(item.preciseRating == 3)
+    }
+
     @Test func readsUserIDFromProfileLink() {
         #expect(GoodreadsFeed.userID(from: "https://www.goodreads.com/user/show/156605841-lin") == "156605841")
         #expect(GoodreadsFeed.userID(from: " 156605841 ") == "156605841")
@@ -281,6 +295,21 @@ struct FeedApplierTests {
         let reading = try #require(try book("1", context).readings?.first)
         #expect(reading.finishedAt == day("2026/10/04"))
         #expect(reading.outcome == .dnf)
+    }
+
+    @Test func newRatingUsesReviewAndReRatingOnGoodreadsApplies() throws {
+        let context = ModelContext(try AmarisStore.makeContainer(inMemory: true))
+        var rated = item("1", readAt: "2026/10/13", rating: 3)
+        rated.reviewRating = 2.75
+        _ = try apply([rated], .read, context)
+        #expect(try book("1", context).rating == 2.75)
+
+        _ = try apply([item("1", readAt: "2026/10/13", rating: 4)], .read, context)   // re-rated
+        #expect(try book("1", context).rating == 4)
+
+        try book("1", context).rating = 2                                           // app edit
+        _ = try apply([item("1", readAt: "2026/10/13", rating: 4)], .read, context)
+        #expect(try book("1", context).rating == 2)
     }
 
     @Test func roundedFeedRatingNeverReplacesPreciseRating() throws {

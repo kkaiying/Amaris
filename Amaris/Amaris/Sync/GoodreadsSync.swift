@@ -9,7 +9,7 @@
 //  - on-hold (custom)  → the open reading is paused; taking it off resumes it
 //  Also uses Goodreads covers, which match the edition I shelved.
 //
-//  Never overwrites hand-edited dates, manual covers, or a precise rating.
+//  Never overwrites hand-edited dates, manual covers, or a rating edited in the app.
 //
 
 import Foundation
@@ -56,8 +56,7 @@ enum FeedApplier {
             }
 
             book.pageCount = book.pageCount ?? item.pageCount
-            // The feed rounds ratings to whole stars; only fill in a missing one.
-            if book.rating == nil, let rating = item.rating { book.rating = Double(rating) }
+            applyRating(of: item, to: book)
 
             // Only a move to a different shelf changes status or starts/ends a
             // reading, so edits made in the app (e.g. marking DNF) aren't undone.
@@ -132,6 +131,20 @@ enum FeedApplier {
             }
         }
         return covers
+    }
+
+    /// Fills in a missing rating, and follows a re-rating on Goodreads. The feed
+    /// only has whole stars, so a rating that already rounds to them (e.g. a
+    /// quarter-star one from the CSV or the app) is left alone.
+    static func applyRating(of item: FeedItem, to book: Book) {
+        let lastSeen = book.goodreadsRating
+        book.goodreadsRating = item.rating
+        guard let whole = item.rating, let rating = item.preciseRating else { return }
+        if let current = book.rating {
+            let rerated = lastSeen != nil && lastSeen != whole
+            guard rerated, abs(current - Double(whole)) > 0.5 else { return }
+        }
+        book.rating = rating
     }
 
     /// Goodreads covers replace Open Library ones, but never a manual cover.

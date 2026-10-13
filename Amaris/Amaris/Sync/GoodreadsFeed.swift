@@ -9,7 +9,9 @@
 //  - 100 items per page.
 //  - `user_date_added` on currently-reading = when the book was shelved there → start date.
 //  - `user_read_at` on read = the "date read" → finish date (midnight UTC).
-//  - `user_rating` is rounded to whole stars, so it must not overwrite a precise rating.
+//  - `user_rating` is rounded to the nearest whole star (2.75 → 3, 4.5 → 4), so
+//    it must not overwrite a precise rating. My reviews often give the exact
+//    rating after the quotes ("2.75 ⭐️"), which is used when it agrees.
 //  - `book_large_image_url` has a size suffix (._SY475_); removing it gives the original.
 //  - Goodreads caches each feed by shelf name for hours, so a shelf (even #ALL#)
 //    can show changes late. A shelf name that doesn't exist falls back to every
@@ -31,6 +33,15 @@ nonisolated struct FeedItem: Equatable {
     var rating: Int?
     var pageCount: Int?
     var shelves: [String] = []
+    /// A rating written in the review, e.g. "2.75 ⭐️".
+    var reviewRating: Double?
+
+    /// The review's rating if it rounds to the feed's whole stars, otherwise the whole stars.
+    var preciseRating: Double? {
+        guard let rating else { return nil }
+        if let reviewRating, abs(reviewRating - Double(rating)) <= 0.5 { return reviewRating }
+        return Double(rating)
+    }
 
     /// Custom shelves that mean "started, but on hold for now".
     static let onHoldShelves: Set<String> = ["on-hold", "paused"]
@@ -123,8 +134,22 @@ nonisolated enum GoodreadsFeed {
             dateAdded: fields["user_date_added"].flatMap(rfc822),
             rating: fields["user_rating"].flatMap { Int($0.trimmed) }.flatMap { $0 > 0 ? $0 : nil },
             pageCount: fields["num_pages"].flatMap { Int($0.trimmed) },
-            shelves: (fields["user_shelves"] ?? "").split(separator: ",").map { String($0).trimmed }
+            shelves: (fields["user_shelves"] ?? "").split(separator: ",").map { String($0).trimmed },
+            reviewRating: fields["user_review"].flatMap(ratingInReview)
         )
+    }
+
+    /// The first rating written in a review ("2.75 ⭐️", "4 stars", "3.5/5"),
+    /// ignoring the quotes in italics at the start.
+    static func ratingInReview(_ review: String) -> Double? {
+        let text = review
+            .replacing(/(?is)<i>.*?<\/i>/, with: " ")
+            .replacing(/<[^>]+>/, with: " ")
+        // Unicode-scalar matching, since "⭐️" is ⭐ plus an invisible variation selector.
+        let pattern = /(?i)(\d(?:\.\d{1,2})?)\s*(?:⭐|★|stars?\b|\/\s*5\b)/.matchingSemantics(.unicodeScalar)
+        guard let match = text.firstMatch(of: pattern),
+              let value = Double(match.1), value > 0, value <= 5 else { return nil }
+        return value
     }
 
     /// Removes the size suffix to get the original image. Nil for Goodreads' "no photo" placeholder.

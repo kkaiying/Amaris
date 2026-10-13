@@ -58,6 +58,8 @@ final class Book {
     /// Whether the book was on the Goodreads on-hold shelf at the last sync.
     /// Like the shelf, only a change pauses or resumes, so app edits stick.
     var goodreadsOnHold: Bool = false
+    /// The whole-star rating Goodreads gave at the last sync, to spot re-ratings.
+    var goodreadsRating: Int?
 
     @Relationship(deleteRule: .cascade, inverse: \Reading.book)
     var readings: [Reading]? = []

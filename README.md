@@ -39,7 +39,7 @@ The project has two parts: the macOS app and a widget extension. Both read the s
 
 The data model has three types. A `Book` holds the details of a title, a `Reading` records a single attempt at it (start and finish dates, whether it was finished or abandoned, and whether the dates were estimated or edited by hand), and a `Quote` belongs to a book. The model is kept compatible with iCloud sync, which would allow an iPhone version later.
 
-There are 46 unit tests covering parsing, history reconstruction, sync behaviour, calendar calculations, quote rotation, and regressions for bugs found during development.
+There are 48 unit tests covering parsing, history reconstruction, sync behaviour, calendar calculations, quote rotation, and regressions for bugs found during development.
 
 ## Design notes
 
