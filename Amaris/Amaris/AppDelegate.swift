@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.startBackgroundSync() }
+            MainActor.assumeIsolated { self?.model.syncAfterWake() }
         }
     }
 

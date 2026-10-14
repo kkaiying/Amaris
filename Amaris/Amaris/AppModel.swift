@@ -53,6 +53,14 @@ final class AppModel {
     private var backgroundSync: Task<Void, Never>?
     private var widgetRefresh: Task<Void, Never>?
 
+    /// After the Mac wakes. The hourly sync is often already starting then (its
+    /// timer ran on through sleep); cancelling it mid-download would leave
+    /// nothing syncing for another hour, so a sync under way is left to finish.
+    func syncAfterWake() {
+        guard !goodreads.isSyncing else { return }
+        startBackgroundSync()
+    }
+
     /// Syncs now and then hourly, whether or not a window is open. Calling it
     /// again (new Goodreads account, Mac woke up) restarts the cycle.
     func startBackgroundSync() {
